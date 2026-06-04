@@ -1,0 +1,184 @@
+const logger = require('../utils/logger');
+const { setVoiceStatus, cacheTrack, handleAutoplay, releaseVoiceChannel } = require('../music/MusicManager');
+const { clearProgressInterval } = require('../utils/progressBar');
+
+// Convert text to Unicode Mathematical Sans-Serif Bold
+const BOLD_MAP = {
+  a:'𝗮',b:'𝗯',c:'𝗰',d:'𝗱',e:'𝗲',f:'𝗳',g:'𝗴',h:'𝗵',i:'𝗶',j:'𝗷',k:'𝗸',l:'𝗹',m:'𝗺',
+  n:'𝗻',o:'𝗼',p:'𝗽',q:'𝗾',r:'𝗿',s:'𝘀',t:'𝘁',u:'𝘂',v:'𝘃',w:'𝘄',x:'𝘅',y:'𝘆',z:'𝘇',
+  A:'𝗔',B:'𝗕',C:'𝗖',D:'𝗗',E:'𝗘',F:'𝗙',G:'𝗚',H:'𝗛',I:'𝗜',J:'𝗝',K:'𝗞',L:'𝗟',M:'𝗠',
+  N:'𝗡',O:'𝗢',P:'𝗣',Q:'𝗤',R:'𝗥',S:'𝗦',T:'𝗧',U:'𝗨',V:'𝗩',W:'𝗪',X:'𝗫',Y:'𝗬',Z:'𝗭',
+  '0':'𝟬','1':'𝟭','2':'𝟮','3':'𝟯','4':'𝟰','5':'𝟱','6':'𝟲','7':'𝟳','8':'𝟴','9':'𝟵',
+};
+function toBold(str) {
+  return String(str).split('').map(c => BOLD_MAP[c] || c).join('');
+}
+
+// Error classification
+const COPYRIGHT_ERRORS = ['copyright', 'not available in your country', 'blocked', 'unavailable', 'private', 'removed'];
+const YOUTUBE_AUTH_ERRORS = ['requires login', 'all clients failed', 'video player configuration error', 'sign in to confirm', 'bot traffic', 'age-restricted'];
+const retryingTracks = new Set();
+
+function classifyError(message) {
+  if (!message) return 'unknown';
+  const lower = message.toLowerCase();
+  if (COPYRIGHT_ERRORS.some((e) => lower.includes(e))) return 'copyright';
+  if (YOUTUBE_AUTH_ERRORS.some((e) => lower.includes(e))) return 'auth';
+  return 'generic';
+}
+
+function getFriendlyErrorMsg(type, title) {
+  const name = title ? `**${title}**` : 'Lagu ini';
+  switch (type) {
+    case 'copyright':
+      return `⚠️ ${name} dibatasi hak cipta atau tidak tersedia di wilayah ini. Coba lagu lain ya!`;
+    case 'auth':
+      return `⚠️ ${name} membutuhkan verifikasi YouTube. Mencari versi lain...`;
+    default:
+      return `⚠️ ${name} gagal diputar. Melewati ke lagu berikutnya...`;
+  }
+}
+
+async function tryFallbackSearch(client, player, track) {
+  const title = track?.info?.title;
+  const author = track?.info?.author;
+  if (!title) return null;
+
+  const query = author ? `${title} ${author}` : title;
+  for (const source of ['scsearch', 'ytsearch']) {
+    try {
+      const result = await player.search({ query, source }, { id: client.user.id, username: 'Fallback' });
+      if (result?.tracks?.length > 0) {
+        logger.info(`Fallback search [${source}] found: "${result.tracks[0].info.title}"`);
+        return { track: result.tracks[0], source };
+      }
+    } catch (err) {
+      logger.warn(`Fallback search [${source}] failed: ${err.message}`);
+    }
+  }
+  return null;
+}
+
+async function loadLavalinkEvents(client) {
+  client.lavalink.on('trackStart', async (player, track) => {
+    try {
+      cacheTrack(player.guildId, track);
+
+      const voiceChannel = client.channels.cache.get(player.voiceChannelId);
+      if (voiceChannel) {
+        const status = `${toBold(track.info.title)} 𝗯𝘆 ${toBold(track.info.author)}`;
+        await setVoiceStatus(client, player.guildId, player.voiceChannelId, status);
+      }
+
+      logger.debug(`Track started: "${track.info.title}" in guild ${player.guildId}`);
+    } catch (err) {
+      logger.error(`trackStart error: ${err.message}`);
+    }
+  });
+
+  client.lavalink.on('trackEnd', async (player, track) => {
+    try {
+      // Clear any active nowplaying progress bar for this guild
+      clearProgressInterval(player.guildId);
+
+      if (player.queue.tracks.length === 0) {
+        await setVoiceStatus(client, player.guildId, player.voiceChannelId, '');
+      }
+      logger.debug(`Track ended: "${track.info.title}" in guild ${player.guildId}`);
+    } catch (err) {
+      logger.error(`trackEnd error: ${err.message}`);
+    }
+  });
+
+  client.lavalink.on('trackStuck', async (player, track) => {
+    logger.warn(`Track stuck: "${track.info.title}" in guild ${player.guildId} — skipping`);
+    try {
+      clearProgressInterval(player.guildId);
+      const textChannel = client.channels.cache.get(player.textChannelId);
+      if (textChannel) await textChannel.send({ content: `⚠️ **${track.info.title}** stuck, melewati otomatis...` }).catch(() => {});
+      await player.skip();
+    } catch (err) {
+      logger.error(`trackStuck skip error: ${err.message}`);
+    }
+  });
+
+  client.lavalink.on('trackError', async (player, track, payload) => {
+    const errMsg = payload?.exception?.message || payload?.exception?.cause || 'Unknown error';
+    const retryKey = `${player.guildId}:${track?.info?.uri}`;
+
+    logger.error(`Track error: "${track?.info?.title}" — ${errMsg}`);
+
+    if (retryingTracks.has(retryKey)) {
+      logger.debug(`Skipping duplicate trackError for "${track?.info?.title}"`);
+      return;
+    }
+
+    clearProgressInterval(player.guildId);
+
+    try {
+      const errType = classifyError(errMsg);
+      const textChannel = client.channels.cache.get(player.textChannelId);
+
+      if (errType === 'copyright') {
+        if (textChannel) await textChannel.send({ content: getFriendlyErrorMsg('copyright', track?.info?.title) }).catch(() => {});
+        if (player.queue.tracks.length > 0) await player.skip();
+        return;
+      }
+
+      if (errType === 'auth') {
+        retryingTracks.add(retryKey);
+        setTimeout(() => retryingTracks.delete(retryKey), 30000);
+
+        logger.info(`YouTube auth error for "${track?.info?.title}" — silent fallback`);
+        const fallback = await tryFallbackSearch(client, player, track);
+
+        if (fallback) {
+          await player.queue.add(fallback.track, 0);
+          if (!player.playing) await player.play();
+        } else {
+          if (textChannel) await textChannel.send({ content: `⚠️ Tidak ada versi lain dari **${track?.info?.title}** yang ditemukan. Melewati...` }).catch(() => {});
+          if (player.queue.tracks.length > 0) await player.skip();
+        }
+        return;
+      }
+
+      // Generic error
+      if (textChannel) await textChannel.send({ content: getFriendlyErrorMsg('generic', track?.info?.title) }).catch(() => {});
+      if (player.queue.tracks.length > 0) await player.skip();
+    } catch (err) {
+      logger.error(`trackError handler error: ${err.message}`);
+    }
+  });
+
+  client.lavalink.on('queueEnd', async (player, track) => {
+    try {
+      logger.debug(`Queue ended in guild ${player.guildId}`);
+      clearProgressInterval(player.guildId);
+      await handleAutoplay(client, player);
+
+      if (player.queue.tracks.length === 0) {
+        await setVoiceStatus(client, player.guildId, player.voiceChannelId, '');
+        const channel = client.channels.cache.get(player.textChannelId);
+        if (channel) {
+          await channel.send({ content: '✅ Queue selesai. Tambah lagu dengan `?play`!' });
+        }
+      }
+    } catch (err) {
+      logger.error(`queueEnd error: ${err.message}`);
+    }
+  });
+
+  client.lavalink.on('playerDestroy', (player, reason) => {
+    clearProgressInterval(player.guildId);
+    releaseVoiceChannel(player.guildId);
+    logger.debug(`Player destroyed in guild ${player.guildId}: ${reason || 'unknown'}`);
+  });
+
+  client.lavalink.on('playerCreate', (player) => {
+    logger.debug(`Player created in guild ${player.guildId}`);
+  });
+
+  logger.info('Lavalink event handlers loaded');
+}
+
+module.exports = { loadLavalinkEvents };
