@@ -1,0 +1,3 @@
+- [lavalink-client v2 crash fix](lavalink-nodemanager-error.md) — must add `error` listener on `manager.nodeManager` or Node.js throws ERR_UNHANDLED_ERROR and crashes
+- [Discord.js ready event rename](discord-ready-event.md) — use `clientReady` not `ready` in discord.js v14+ to avoid deprecation
+- [Replit IPv6 WebSocket ETIMEDOUT](replit-ipv6-websocket.md) — patch dns.lookup to family:4 only; --dns-result-order and bare IPs both fail; hostname+patch is the only fix
