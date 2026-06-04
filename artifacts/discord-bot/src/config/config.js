@@ -1,0 +1,83 @@
+require('dotenv').config();
+
+module.exports = {
+  prefix: process.env.PREFIX || '?',
+  token: process.env.DISCORD_TOKEN,
+  clientId: process.env.CLIENT_ID || '1507649904456241202',
+  guildId: process.env.GUILD_ID || null,
+
+  lavalink: {
+    nodes: [
+      // Node 1 – primary (Railway self-hosted)
+      {
+        id: 'primary',
+        host: process.env.LAVALINK_HOST || 'lavalink-2026-production-dc77.up.railway.app',
+        port: parseInt(process.env.LAVALINK_PORT || '443'),
+        password: process.env.LAVALINK_PASSWORD || 'Ariekonur0',
+        secure: process.env.LAVALINK_SECURE !== 'false',
+      },
+      // Node 2 – serenetia (public fallback)
+      {
+        id: 'serenetia',
+        host: 'lavalinkv4.serenetia.com',
+        port: 443,
+        password: 'https://dsc.gg/ajidevserver',
+        secure: true,
+      },
+      // Node 3 – DevAmOP (public fallback)
+      {
+        id: 'devamop',
+        host: 'lavalink.devamop.in',
+        port: 443,
+        password: 'DevAmOP',
+        secure: true,
+      },
+      // Node 4 – Jirayu (public fallback)
+      {
+        id: 'jirayu',
+        host: 'lavalink.jirayu.net',
+        port: 13592,
+        password: 'youshallnotpass',
+        secure: false,
+      },
+    ],
+  },
+
+  radio: {
+    stations: [
+      { name: 'Lofi Girl',       url: 'https://www.youtube.com/watch?v=jfKfPfyJRdk', emoji: '📻' },
+      { name: 'Synthwave Radio', url: 'https://www.youtube.com/watch?v=4xDzrJKXOOY', emoji: '🌆' },
+      { name: 'Jazz & Blues',    url: 'https://www.youtube.com/watch?v=Dx5qFachd3A', emoji: '🎷' },
+      { name: 'Chillhop',        url: 'https://www.youtube.com/watch?v=7NOSDKb0HlU', emoji: '🐸' },
+      { name: 'Deep Focus',      url: 'https://www.youtube.com/watch?v=5qap5aO4i9A', emoji: '🧘' },
+    ],
+  },
+
+  music: {
+    defaultVolume: parseInt(process.env.DEFAULT_VOLUME || '80'),
+    maxQueueSize: 500,
+    searchPlatform: 'ytmsearch',
+    leaveOnEmptyDelay: 30000,
+    leaveOnEndDelay: 30000,
+    voiceChannelBitrate: 256000,
+  },
+
+  cooldowns: {
+    default: 3000,
+    play: 5000,
+    skip: 2000,
+    volume: 2000,
+  },
+
+  keepAlive: {
+    port: parseInt(process.env.PORT || '3000'),
+  },
+
+  colors: {
+    primary: 0x5865F2,
+    success: 0x57F287,
+    warning: 0xFEE75C,
+    error: 0xED4245,
+    info: 0x5865F2,
+  },
+};
