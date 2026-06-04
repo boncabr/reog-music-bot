@@ -1,0 +1,22 @@
+{
+  "name": "@workspace/discord-bot",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "node --dns-result-order=ipv4first src/index.js",
+    "start": "node --dns-result-order=ipv4first src/index.js"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "@discordjs/rest": "^2.4.3",
+    "discord.js": "^14.18.0",
+    "dotenv": "^16.5.0",
+    "express": "^4.21.2",
+    "lavalink-client": "^2.4.0",
+    "winston": "^3.17.0"
+  }
+}
