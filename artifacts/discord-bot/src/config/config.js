@@ -66,7 +66,7 @@ module.exports = {
     default: 3000,
     play: 5000,
     skip: 2000,
-    volume: 2000,
+    volume: 100,
   },
 
   keepAlive: {
