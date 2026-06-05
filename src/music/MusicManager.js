@@ -9,24 +9,6 @@ const musicCacheMap = new Map();
 const radioModeMap = new Map();   // guildId → true/false (radio mode active)
 
 
-const DEFAULT_EQ_BANDS = [
-  { band: 0,  gain: 0.25 },
-  { band: 1,  gain: 0.25 },
-  { band: 2,  gain: 0.20 },
-  { band: 3,  gain: 0.10 },
-  { band: 4,  gain: 0.05 },
-  { band: 5,  gain: 0.05 },
-  { band: 6,  gain: 0.10 },
-  { band: 7,  gain: 0.15 },  // Vokal boost
-  { band: 8,  gain: 0.15 },  // Vokal boost
-  { band: 9,  gain: 0.10 },
-  { band: 10, gain: 0.05 },
-  { band: 11, gain: 0.00 },
-  { band: 12, gain: -0.05 },
-  { band: 13, gain: -0.05 },
-  { band: 14, gain: -0.05 },
-];
-
 // ─── Genre Detection ──────────────────────────────────────────────────────────
 
 const GENRE_PATTERNS = [
@@ -282,7 +264,6 @@ async function handleAutoplay(client, player) {
 
 module.exports = {
   MAX_VOICE_CHANNELS,
-  DEFAULT_EQ_BANDS,
   activeVoiceChannels,
   detectGenre,
   detectSource,
