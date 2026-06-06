@@ -108,10 +108,6 @@ function getAutoplay(guildId) { return autoplayMap.get(guildId) || false; }
 
 // ─── Seed Management ──────────────────────────────────────────────────────────
 
-/**
- * Set seed saat user request lagu baru via ?play.
- * Juga reset riwayat autoplay agar rantai dimulai fresh.
- */
 function setSeed(guildId, track) {
   if (!track?.info) return;
   seedMap.set(guildId, {
@@ -127,10 +123,6 @@ function getSeed(guildId) {
   return seedMap.get(guildId) || null;
 }
 
-/**
- * Update seed setelah lagu autoplay mulai diputar,
- * agar lagu berikutnya berkaitan dengan yang baru ini.
- */
 function updateAutoplaySeed(guildId, track) {
   if (!track?.info) return;
   seedMap.set(guildId, {
@@ -141,12 +133,130 @@ function updateAutoplaySeed(guildId, track) {
   if (!autoplayHistoryMap.has(guildId)) autoplayHistoryMap.set(guildId, new Set());
   const hist = autoplayHistoryMap.get(guildId);
   hist.add(track.info.uri);
-  // Batasi history agar tidak tumbuh tak terbatas
   if (hist.size > 100) {
     const oldest = hist.values().next().value;
     hist.delete(oldest);
   }
   logger.debug(`Autoplay seed updated for guild ${guildId}: "${track.info.title}"`);
+}
+
+// ─── Genre Detection ──────────────────────────────────────────────────────────
+
+/**
+ * Deteksi genre dari daftar track berdasarkan judul dan nama artis.
+ * Mengembalikan string genre atau null jika tidak terdeteksi.
+ */
+function detectGenre(tracks) {
+  if (!tracks || tracks.length === 0) return null;
+
+  const text = tracks
+    .map((t) => `${t.info?.title || ''} ${t.info?.author || ''}`)
+    .join(' ')
+    .toLowerCase();
+
+  const genres = [
+    {
+      name: 'K-Pop',
+      keywords: [
+        'kpop', 'k-pop', 'bts', 'blackpink', 'twice', 'exo', 'got7', 'nct',
+        'stray kids', 'ive', 'aespa', 'red velvet', 'shinee', 'monsta x',
+        'seventeen', 'enhypen', 'txt', 'bigbang', 'super junior', 'mamamoo',
+        'gidle', '(g)i-dle', 'itzy', 'newjeans', 'le sserafim',
+      ],
+    },
+    {
+      name: 'Pop',
+      keywords: [
+        'pop', 'taylor swift', 'ariana grande', 'justin bieber', 'ed sheeran',
+        'dua lipa', 'billie eilish', 'harry styles', 'olivia rodrigo', 'selena gomez',
+        'charlie puth', 'the chainsmokers', 'maroon 5', 'shawn mendes',
+      ],
+    },
+    {
+      name: 'Hip-Hop / Rap',
+      keywords: [
+        'rap', 'hip hop', 'hiphop', 'hip-hop', 'drake', 'kendrick', 'j. cole',
+        'travis scott', 'post malone', 'eminem', 'lil wayne', 'lil uzi',
+        'kanye', 'nicki minaj', 'cardi b', 'juice wrld', 'xxxtentacion',
+      ],
+    },
+    {
+      name: 'Rock',
+      keywords: [
+        'rock', 'metal', 'linkin park', 'metallica', 'green day', 'nirvana',
+        'foo fighters', 'red hot chili', 'system of a down', 'ac/dc',
+        'queen', 'guns n roses', 'bon jovi', 'avenged sevenfold',
+      ],
+    },
+    {
+      name: 'R&B / Soul',
+      keywords: [
+        'r&b', 'rnb', 'soul', 'the weeknd', 'frank ocean', 'sza',
+        'usher', 'beyoncé', 'beyonce', 'rihanna', 'alicia keys',
+        'john legend', 'h.e.r.', 'daniel caesar',
+      ],
+    },
+    {
+      name: 'EDM / Electronic',
+      keywords: [
+        'edm', 'electronic', 'house', 'techno', 'dubstep', 'trance',
+        'avicii', 'marshmello', 'alan walker', 'dj', 'tiesto', 'calvin harris',
+        'david guetta', 'martin garrix', 'skrillex', 'deadmau5',
+      ],
+    },
+    {
+      name: 'Jazz',
+      keywords: ['jazz', 'blues', 'swing', 'bossa nova', 'bebop', 'coltrane', 'miles davis'],
+    },
+    {
+      name: 'Classical',
+      keywords: ['classical', 'orchestra', 'symphony', 'beethoven', 'mozart', 'chopin', 'bach', 'handel'],
+    },
+    {
+      name: 'Lo-Fi',
+      keywords: ['lofi', 'lo-fi', 'lo fi', 'chill', 'study music', 'relaxing music', 'cafe music'],
+    },
+    {
+      name: 'Indie / Alternative',
+      keywords: ['indie', 'alternative', 'folk', 'arctic monkeys', 'tame impala', 'vampire weekend'],
+    },
+    {
+      name: 'OPM',
+      keywords: [
+        'opm', 'filipino', 'tagalog', 'kundiman', 'pamungkas',
+        'ben&ben', 'december avenue', 'eraserheads', 'parokya', 'rivermaya',
+      ],
+    },
+    {
+      name: 'Dangdut',
+      keywords: [
+        'dangdut', 'koplo', 'rhoma irama', 'via vallen', 'nella kharisma',
+        'denny caknan', 'happy asmara',
+      ],
+    },
+    {
+      name: 'Indonesia Pop',
+      keywords: [
+        'noah', 'dewa 19', 'slank', 'sheila on 7', 'peterpan', 'ungu',
+        'armada', 'raisa', 'isyana', 'rizky febian', 'andmesh', 'kunto aji',
+        'hindia', 'fourtwnty', 'tulus', 'yura yunita', 'tiara andini',
+        'mahalini', 'nadin amizah',
+      ],
+    },
+  ];
+
+  let bestMatch = null;
+  let bestScore = 0;
+
+  for (const genre of genres) {
+    const score = genre.keywords.filter((k) => text.includes(k)).length;
+    if (score > bestScore) {
+      bestScore = score;
+      bestMatch = genre.name;
+    }
+  }
+
+  return bestScore > 0 ? bestMatch : null;
 }
 
 // ─── Track Cache ─────────────────────────────────────────────────────────────
@@ -165,8 +275,6 @@ function getCachedTracks(guildId) { return musicCacheMap.get(guildId) || []; }
 async function handleAutoplay(client, player) {
   if (!getAutoplay(player.guildId)) return;
 
-  // Ambil seed — prioritas: seedMap (di-set oleh ?play atau autoplay sebelumnya)
-  // Fallback ke track terakhir di cache jika belum ada seed
   let seed = getSeed(player.guildId);
   if (!seed) {
     const cache = getCachedTracks(player.guildId);
@@ -178,7 +286,6 @@ async function handleAutoplay(client, player) {
   const history = autoplayHistoryMap.get(player.guildId) || new Set();
 
   try {
-    // Cari lagu terkait berdasarkan seed — deterministik, bukan random
     const query = `${seed.title} ${seed.author}`;
     let result = null;
 
@@ -199,11 +306,9 @@ async function handleAutoplay(client, player) {
       return;
     }
 
-    // Pilih lagu: yang belum ada di riwayat & bukan seed itu sendiri — TANPA random
     const filtered = result.tracks.filter(
       (t) => t.info.uri !== seed.uri && !history.has(t.info.uri)
     );
-    // Fallback: ambil yang bukan seed saja, lalu yang pertama apapun
     const track =
       filtered[0] ||
       result.tracks.find((t) => t.info.uri !== seed.uri) ||
@@ -211,7 +316,6 @@ async function handleAutoplay(client, player) {
 
     if (!track) return;
 
-    // Tandai sebagai lagu autoplay agar lavalinkHandler bisa update seed saat trackStart
     track.requester = { id: client.user.id, username: 'Autoplay', isAutoplay: true };
 
     await player.queue.add(track);
@@ -236,6 +340,7 @@ module.exports = {
   setSeed,
   getSeed,
   updateAutoplaySeed,
+  detectGenre,
   cacheTrack,
   getCachedTracks,
   handleAutoplay,

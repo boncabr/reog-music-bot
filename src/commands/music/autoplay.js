@@ -12,7 +12,6 @@ async function handleAutoplay(client, ctx) {
   setAutoplay(guildId, newState);
 
   if (!newState) {
-    // Turning OFF
     const embed = createEmbed({
       color: config.colors.warning,
       title: '🔄 Autoplay Dimatikan',
@@ -21,7 +20,7 @@ async function handleAutoplay(client, ctx) {
     return isInteraction ? ctx.reply({ embeds: [embed] }) : ctx.reply({ embeds: [embed] });
   }
 
-  // Turning ON — detect genre from recent tracks
+  // Autoplay ON — tampilkan info genre/seed
   const cache = getCachedTracks(guildId);
   const player = client.lavalink.getPlayer(guildId);
   const currentTrack = player?.queue?.current;
@@ -30,6 +29,7 @@ async function handleAutoplay(client, ctx) {
     ? [...cache.slice(-4), currentTrack]
     : cache.slice(-5);
 
+  // detectGenre aman dipanggil — selalu tersedia di MusicManager
   const genre = detectGenre(recentTracks);
 
   let description = '🎵 Bot akan otomatis menambahkan lagu saat queue habis.\n\n';
