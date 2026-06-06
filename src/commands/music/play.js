@@ -1,9 +1,8 @@
 const { SlashCommandBuilder } = require('discord.js');
-const { getOrCreatePlayer, search, play, setRadioMode } = require('../../music/MusicManager');
+const { getOrCreatePlayer, search, play, setRadioMode, setSeed } = require('../../music/MusicManager');
 const { successEmbed, errorEmbed, createEmbed } = require('../../utils/embeds');
 const config = require('../../config/config');
 
-// Detect platform label for display
 function platformLabel(query) {
   if (/open\.spotify\.com/i.test(query)) return 'Spotify';
   if (/music\.apple\.com/i.test(query)) return 'Apple Music';
@@ -32,11 +31,9 @@ async function handlePlay(client, ctx, queryStr) {
       : ctx.reply({ embeds: [embed] });
   }
 
-  // Respond immediately so user gets instant feedback
   if (isInteraction) await ctx.deferReply();
 
   try {
-    // Disable radio mode when user plays a regular track
     setRadioMode(ctx.guild.id, false);
 
     const player = await getOrCreatePlayer(
@@ -73,8 +70,8 @@ async function handlePlay(client, ctx, queryStr) {
 
     await play(player, tracks);
 
-    // 🔊 Bass + Vocal Boost default
-    
+    // Set seed ke lagu pertama yang diminta user — autoplay akan mengikuti dari sini
+    setSeed(ctx.guild.id, tracks[0]);
 
     const isNowPlaying = !player.queue.previous && player.queue.tracks.length <= tracks.length;
     const embed = createEmbed({

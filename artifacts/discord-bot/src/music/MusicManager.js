@@ -4,6 +4,8 @@ const config = require('../config/config');
 const autoplayMap = new Map();
 const musicCacheMap = new Map();
 const radioModeMap = new Map();
+const seedMap = new Map();            // { title, author, uri } — seed lagu terakhir user/autoplay
+const autoplayHistoryMap = new Map(); // Set<uri> — URI yang sudah diputar dalam satu sesi autoplay
 
 // ─── Radio Mode ───────────────────────────────────────────────────────────────
 
@@ -34,7 +36,6 @@ async function getOrCreatePlayer(client, guildId, voiceChannelId, textChannelId)
       volume: config.music.defaultVolume,
       instaUpdateFiltersFix: false,
     });
-
   } else {
     if (voiceChannelId && player.voiceChannelId !== voiceChannelId) {
       player.voiceChannelId = voiceChannelId;
@@ -105,6 +106,49 @@ async function setVoiceStatus(client, guildId, channelId, status) {
 function setAutoplay(guildId, enabled) { autoplayMap.set(guildId, enabled); }
 function getAutoplay(guildId) { return autoplayMap.get(guildId) || false; }
 
+// ─── Seed Management ──────────────────────────────────────────────────────────
+
+/**
+ * Set seed saat user request lagu baru via ?play.
+ * Juga reset riwayat autoplay agar rantai dimulai fresh.
+ */
+function setSeed(guildId, track) {
+  if (!track?.info) return;
+  seedMap.set(guildId, {
+    title: track.info.title,
+    author: track.info.author,
+    uri: track.info.uri,
+  });
+  autoplayHistoryMap.set(guildId, new Set([track.info.uri]));
+  logger.debug(`Seed set for guild ${guildId}: "${track.info.title}" by ${track.info.author}`);
+}
+
+function getSeed(guildId) {
+  return seedMap.get(guildId) || null;
+}
+
+/**
+ * Update seed setelah lagu autoplay mulai diputar,
+ * agar lagu berikutnya berkaitan dengan yang baru ini.
+ */
+function updateAutoplaySeed(guildId, track) {
+  if (!track?.info) return;
+  seedMap.set(guildId, {
+    title: track.info.title,
+    author: track.info.author,
+    uri: track.info.uri,
+  });
+  if (!autoplayHistoryMap.has(guildId)) autoplayHistoryMap.set(guildId, new Set());
+  const hist = autoplayHistoryMap.get(guildId);
+  hist.add(track.info.uri);
+  // Batasi history agar tidak tumbuh tak terbatas
+  if (hist.size > 100) {
+    const oldest = hist.values().next().value;
+    hist.delete(oldest);
+  }
+  logger.debug(`Autoplay seed updated for guild ${guildId}: "${track.info.title}"`);
+}
+
 // ─── Track Cache ─────────────────────────────────────────────────────────────
 
 function cacheTrack(guildId, track) {
@@ -121,37 +165,60 @@ function getCachedTracks(guildId) { return musicCacheMap.get(guildId) || []; }
 async function handleAutoplay(client, player) {
   if (!getAutoplay(player.guildId)) return;
 
-  const cache = getCachedTracks(player.guildId);
-  const lastTrack = player.queue.previous || (cache.length > 0 ? cache[cache.length - 1] : null);
-  if (!lastTrack) return;
+  // Ambil seed — prioritas: seedMap (di-set oleh ?play atau autoplay sebelumnya)
+  // Fallback ke track terakhir di cache jika belum ada seed
+  let seed = getSeed(player.guildId);
+  if (!seed) {
+    const cache = getCachedTracks(player.guildId);
+    if (cache.length === 0) return;
+    const last = cache[cache.length - 1];
+    seed = { title: last.info.title, author: last.info.author, uri: last.info.uri };
+  }
+
+  const history = autoplayHistoryMap.get(player.guildId) || new Set();
 
   try {
-    const query = `${lastTrack.info.author} ${lastTrack.info.title}`;
+    // Cari lagu terkait berdasarkan seed — deterministik, bukan random
+    const query = `${seed.title} ${seed.author}`;
     let result = null;
 
-    try {
-      result = await player.search(
-        { query, source: 'ytmsearch' },
-        { id: client.user.id, username: 'Autoplay' }
-      );
-    } catch (err) {
-      logger.warn(`Autoplay ytmsearch failed: ${err.message}, trying ytsearch...`);
-      result = await player.search(
-        { query, source: 'ytsearch' },
-        { id: client.user.id, username: 'Autoplay' }
-      );
-    }
-
-    if (result?.tracks?.length > 0) {
-      const filtered = result.tracks.filter((t) => t.info.uri !== lastTrack.info.uri);
-      const pool = filtered.length > 0 ? filtered : result.tracks;
-      const track = pool[Math.floor(Math.random() * Math.min(3, pool.length))];
-      if (track) {
-        await player.queue.add(track);
-        await player.play();
-        logger.debug(`Autoplay: queued "${track.info.title}" in guild ${player.guildId}`);
+    for (const source of ['ytmsearch', 'ytsearch']) {
+      try {
+        result = await player.search(
+          { query, source },
+          { id: client.user.id, username: 'Autoplay', isAutoplay: true }
+        );
+        if (result?.tracks?.length > 0) break;
+      } catch (err) {
+        logger.warn(`Autoplay search [${source}] failed: ${err.message}`);
       }
     }
+
+    if (!result?.tracks?.length) {
+      logger.warn(`Autoplay: tidak ada hasil untuk seed "${seed.title}" di guild ${player.guildId}`);
+      return;
+    }
+
+    // Pilih lagu: yang belum ada di riwayat & bukan seed itu sendiri — TANPA random
+    const filtered = result.tracks.filter(
+      (t) => t.info.uri !== seed.uri && !history.has(t.info.uri)
+    );
+    // Fallback: ambil yang bukan seed saja, lalu yang pertama apapun
+    const track =
+      filtered[0] ||
+      result.tracks.find((t) => t.info.uri !== seed.uri) ||
+      result.tracks[0];
+
+    if (!track) return;
+
+    // Tandai sebagai lagu autoplay agar lavalinkHandler bisa update seed saat trackStart
+    track.requester = { id: client.user.id, username: 'Autoplay', isAutoplay: true };
+
+    await player.queue.add(track);
+    await player.play();
+    logger.debug(
+      `Autoplay: mengantre "${track.info.title}" berdasarkan seed "${seed.title}" di guild ${player.guildId}`
+    );
   } catch (err) {
     logger.error(`Autoplay error: ${err.message}`);
   }
@@ -166,6 +233,9 @@ module.exports = {
   setVoiceStatus,
   setAutoplay,
   getAutoplay,
+  setSeed,
+  getSeed,
+  updateAutoplaySeed,
   cacheTrack,
   getCachedTracks,
   handleAutoplay,

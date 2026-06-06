@@ -1,8 +1,6 @@
 const logger = require('../utils/logger');
-const { setVoiceStatus, cacheTrack, handleAutoplay, releaseVoiceChannel } = require('../music/MusicManager');
-const { clearProgressInterval } = require('../utils/progressBar');
+const { setVoiceStatus, cacheTrack, handleAutoplay, isRadioMode, getAutoplay, updateAutoplaySeed } = require('../music/MusicManager');
 
-// Convert text to Unicode Mathematical Sans-Serif Bold
 const BOLD_MAP = {
   a:'𝗮',b:'𝗯',c:'𝗰',d:'𝗱',e:'𝗲',f:'𝗳',g:'𝗴',h:'𝗵',i:'𝗶',j:'𝗷',k:'𝗸',l:'𝗹',m:'𝗺',
   n:'𝗻',o:'𝗼',p:'𝗽',q:'𝗾',r:'𝗿',s:'𝘀',t:'𝘁',u:'𝘂',v:'𝘃',w:'𝘄',x:'𝘅',y:'𝘆',z:'𝘇',
@@ -14,7 +12,6 @@ function toBold(str) {
   return String(str).split('').map(c => BOLD_MAP[c] || c).join('');
 }
 
-// Error classification
 const COPYRIGHT_ERRORS = ['copyright', 'not available in your country', 'blocked', 'unavailable', 'private', 'removed'];
 const YOUTUBE_AUTH_ERRORS = ['requires login', 'all clients failed', 'video player configuration error', 'sign in to confirm', 'bot traffic', 'age-restricted'];
 const retryingTracks = new Set();
@@ -64,6 +61,11 @@ async function loadLavalinkEvents(client) {
     try {
       cacheTrack(player.guildId, track);
 
+      // Jika lagu ini hasil autoplay, update seed agar rantai berikutnya relevan
+      if (track.requester?.isAutoplay && getAutoplay(player.guildId)) {
+        updateAutoplaySeed(player.guildId, track);
+      }
+
       const voiceChannel = client.channels.cache.get(player.voiceChannelId);
       if (voiceChannel) {
         const status = `${toBold(track.info.title)} 𝗯𝘆 ${toBold(track.info.author)}`;
@@ -78,9 +80,6 @@ async function loadLavalinkEvents(client) {
 
   client.lavalink.on('trackEnd', async (player, track) => {
     try {
-      // Clear any active nowplaying progress bar for this guild
-      clearProgressInterval(player.guildId);
-
       if (player.queue.tracks.length === 0) {
         await setVoiceStatus(client, player.guildId, player.voiceChannelId, '');
       }
@@ -93,10 +92,9 @@ async function loadLavalinkEvents(client) {
   client.lavalink.on('trackStuck', async (player, track) => {
     logger.warn(`Track stuck: "${track.info.title}" in guild ${player.guildId} — skipping`);
     try {
-      clearProgressInterval(player.guildId);
       const textChannel = client.channels.cache.get(player.textChannelId);
       if (textChannel) await textChannel.send({ content: `⚠️ **${track.info.title}** stuck, melewati otomatis...` }).catch(() => {});
-      await player.skip();
+      if (player.queue.tracks.length > 0) await player.skip();
     } catch (err) {
       logger.error(`trackStuck skip error: ${err.message}`);
     }
@@ -112,8 +110,6 @@ async function loadLavalinkEvents(client) {
       logger.debug(`Skipping duplicate trackError for "${track?.info?.title}"`);
       return;
     }
-
-    clearProgressInterval(player.guildId);
 
     try {
       const errType = classifyError(errMsg);
@@ -153,14 +149,13 @@ async function loadLavalinkEvents(client) {
   client.lavalink.on('queueEnd', async (player, track) => {
     try {
       logger.debug(`Queue ended in guild ${player.guildId}`);
-      clearProgressInterval(player.guildId);
       await handleAutoplay(client, player);
 
       if (player.queue.tracks.length === 0) {
         await setVoiceStatus(client, player.guildId, player.voiceChannelId, '');
         const channel = client.channels.cache.get(player.textChannelId);
         if (channel) {
-          await channel.send({ content: '✅ Queue selesai. Tambah lagu dengan `?play`!' });
+          await channel.send({ content: '✅ Queue selesai. Tambah lagu dengan `?play`!' }).catch(() => {});
         }
       }
     } catch (err) {
@@ -169,8 +164,6 @@ async function loadLavalinkEvents(client) {
   });
 
   client.lavalink.on('playerDestroy', (player, reason) => {
-    clearProgressInterval(player.guildId);
-    releaseVoiceChannel(player.guildId);
     logger.debug(`Player destroyed in guild ${player.guildId}: ${reason || 'unknown'}`);
   });
 

@@ -1,86 +1,11 @@
 const logger = require('../utils/logger');
 const config = require('../config/config');
 
-const MAX_VOICE_CHANNELS = 2;
-
-const activeVoiceChannels = new Set();
 const autoplayMap = new Map();
 const musicCacheMap = new Map();
-const radioModeMap = new Map();   // guildId → true/false (radio mode active)
-
-
-// ─── Genre Detection ──────────────────────────────────────────────────────────
-
-const GENRE_PATTERNS = [
-  { genre: 'lofi hip hop',         keywords: ['lo-fi', 'lofi', 'lo fi', 'chill beats', 'study beats', 'study music', 'relax beats'] },
-  { genre: 'hip hop rap',          keywords: ['hip hop', 'hip-hop', 'rap', 'trap', 'drill', 'freestyle', 'lyric', 'cypher'] },
-  { genre: 'r&b soul',             keywords: ['r&b', 'rnb', 'soul', 'neo soul', 'rhythm and blues'] },
-  { genre: 'heavy metal',          keywords: ['metal', 'heavy metal', 'death metal', 'thrash', 'black metal', 'metalcore'] },
-  { genre: 'rock',                 keywords: ['rock', 'punk', 'grunge', 'alternative rock', 'indie rock'] },
-  { genre: 'jazz blues',           keywords: ['jazz', 'blues', 'swing', 'bebop', 'bossa nova'] },
-  { genre: 'edm electronic',       keywords: ['edm', 'electronic', 'house', 'techno', 'trance', 'dubstep', 'drum and bass', 'dnb', 'dj ', 'remix'] },
-  { genre: 'classical orchestral', keywords: ['classical', 'orchestra', 'symphony', 'concerto', 'sonata', 'beethoven', 'mozart', 'chopin'] },
-  { genre: 'country folk',         keywords: ['country', 'folk', 'bluegrass', 'acoustic'] },
-  { genre: 'reggae',               keywords: ['reggae', 'reggaeton', 'dancehall', 'ska'] },
-  { genre: 'kpop',                 keywords: ['kpop', 'k-pop', 'korean pop', 'bts', 'blackpink', 'twice', 'exo', 'nct', 'stray kids', 'aespa', 'ive', 'itzy'] },
-  { genre: 'japanese anime ost',   keywords: ['jpop', 'j-pop', 'japanese', 'anime', 'opening', 'ending', 'ost', 'naruto', 'one piece', 'demon slayer', 'attack on titan'] },
-  { genre: 'dangdut koplo',        keywords: ['dangdut', 'koplo', 'campursari', 'jaranan', 'orkes'] },
-  { genre: 'pop indonesia',        keywords: ['indonesia', 'melayu', 'malaysia', 'indo pop', 'pop indo'] },
-  { genre: 'pop',                  keywords: ['pop', 'chart', 'hits', 'top 40', 'viral'] },
-];
-
-function detectGenre(tracks) {
-  if (!tracks || tracks.length === 0) return null;
-  const combined = tracks
-    .map((t) => `${t.info?.title || ''} ${t.info?.author || ''}`)
-    .join(' ')
-    .toLowerCase();
-
-  for (const { genre, keywords } of GENRE_PATTERNS) {
-    if (keywords.some((k) => combined.includes(k))) return genre;
-  }
-  return null;
-}
-
-function buildAutoplayQuery(lastTrack, cache) {
-  const recentTracks = [...cache.slice(-4), lastTrack].filter(Boolean);
-  const genre = detectGenre(recentTracks);
-  const year = new Date().getFullYear();
-
-  if (genre) {
-    const styles = [
-      `best ${genre} songs playlist`,
-      `${genre} mix ${year}`,
-      `top ${genre} music`,
-      `${genre} hits playlist`,
-    ];
-    const query = styles[Math.floor(Math.random() * styles.length)];
-    logger.debug(`Autoplay genre detected: "${genre}" → query: "${query}"`);
-    return { query, genre };
-  }
-
-  const artist = lastTrack.info.author || '';
-  const styles = [
-    `${artist} mix playlist`,
-    `best songs like ${lastTrack.info.title}`,
-    `${artist} greatest hits`,
-    `${artist} popular songs`,
-  ];
-  const query = styles[Math.floor(Math.random() * styles.length)];
-  logger.debug(`Autoplay artist fallback: "${artist}" → query: "${query}"`);
-  return { query, genre: null };
-}
-
-// ─── Voice Channel Tracking ──────────────────────────────────────────────────
-
-function getActiveChannelCount() { return activeVoiceChannels.size; }
-function isVoiceChannelActive(guildId) { return activeVoiceChannels.has(guildId); }
-
-function releaseVoiceChannel(guildId) {
-  activeVoiceChannels.delete(guildId);
-  radioModeMap.delete(guildId);
-  logger.debug(`Released voice slot for guild ${guildId} — active: ${activeVoiceChannels.size}/${MAX_VOICE_CHANNELS}`);
-}
+const radioModeMap = new Map();
+const seedMap = new Map();            // { title, author, uri } — seed lagu terakhir user/autoplay
+const autoplayHistoryMap = new Map(); // Set<uri> — URI yang sudah diputar dalam satu sesi autoplay
 
 // ─── Radio Mode ───────────────────────────────────────────────────────────────
 
@@ -95,20 +20,13 @@ async function getOrCreatePlayer(client, guildId, voiceChannelId, textChannelId)
   if (connectedNodes.length === 0) {
     throw new Error(
       'Server musik sedang tidak tersedia (semua node Lavalink offline). ' +
-      'Coba lagi dalam beberapa detik, atau hubungi admin bot.'
+      'Coba lagi dalam beberapa detik.'
     );
   }
 
   let player = client.lavalink.getPlayer(guildId);
 
   if (!player) {
-    if (activeVoiceChannels.size >= MAX_VOICE_CHANNELS) {
-      throw new Error(
-        `Bot sudah aktif di **${activeVoiceChannels.size}** voice channel (maksimal ${MAX_VOICE_CHANNELS}). ` +
-        `Tunggu hingga salah satu channel selesai, atau gunakan \`?leave\` di server lain.`
-      );
-    }
-
     player = await client.lavalink.createPlayer({
       guildId,
       voiceChannelId,
@@ -118,29 +36,17 @@ async function getOrCreatePlayer(client, guildId, voiceChannelId, textChannelId)
       volume: config.music.defaultVolume,
       instaUpdateFiltersFix: false,
     });
-
-    activeVoiceChannels.add(guildId);
-    logger.info(`Voice slot claimed for guild ${guildId} — active: ${activeVoiceChannels.size}/${MAX_VOICE_CHANNELS}`);
-
   } else {
     if (voiceChannelId && player.voiceChannelId !== voiceChannelId) {
       player.voiceChannelId = voiceChannelId;
     }
-    if (textChannelId) player.textChannelId = textChannelId;
+    if (textChannelId) {
+      player.textChannelId = textChannelId;
+    }
   }
 
   if (!player.connected) {
     await player.connect();
-  }
-
-  try {
-    const vc = client.channels.cache.get(voiceChannelId);
-    if (vc?.type === 2 && vc.bitrate < config.music.voiceChannelBitrate) {
-      await vc.setBitrate(config.music.voiceChannelBitrate);
-      logger.debug(`Voice channel bitrate set to 256kbps in guild ${guildId}`);
-    }
-  } catch (err) {
-    logger.debug(`Could not set bitrate: ${err.message}`);
   }
 
   return player;
@@ -148,24 +54,22 @@ async function getOrCreatePlayer(client, guildId, voiceChannelId, textChannelId)
 
 // ─── Search & Play ───────────────────────────────────────────────────────────
 
-function detectSource(query) {
-  const q = query.trim();
-  if (/open\.spotify\.com/i.test(q)) return 'spsearch';
-  if (/music\.apple\.com/i.test(q)) return 'amsearch';
-  if (/soundcloud\.com/i.test(q)) return 'scsearch';
-  if (/youtube\.com|youtu\.be/i.test(q)) return undefined;
-  if (/^https?:\/\//i.test(q)) return undefined;
-  return config.music.searchPlatform;
-}
-
 async function search(player, query, requester) {
-  const source = detectSource(query);
+  const isUrl = /^https?:\/\//i.test(query);
+  const isSpotify = /open\.spotify\.com/i.test(query);
+  const isSoundCloud = /soundcloud\.com/i.test(query);
+  const isYoutube = /youtube\.com|youtu\.be/i.test(query);
+
+  let source = config.music.searchPlatform;
+  if (isSpotify) source = 'spsearch';
+  else if (isSoundCloud) source = 'scsearch';
+  else if (isYoutube || isUrl) source = undefined;
 
   let result;
   try {
     result = await player.search({ query, source }, requester);
   } catch (err) {
-    logger.warn(`Primary search failed (source: ${source}): ${err.message}. Trying ytsearch fallback...`);
+    logger.warn(`Primary search failed (${source}): ${err.message}. Trying fallback...`);
     try {
       result = await player.search({ query, source: 'ytsearch' }, requester);
     } catch (fallbackErr) {
@@ -202,6 +106,49 @@ async function setVoiceStatus(client, guildId, channelId, status) {
 function setAutoplay(guildId, enabled) { autoplayMap.set(guildId, enabled); }
 function getAutoplay(guildId) { return autoplayMap.get(guildId) || false; }
 
+// ─── Seed Management ──────────────────────────────────────────────────────────
+
+/**
+ * Set seed saat user request lagu baru via ?play.
+ * Juga reset riwayat autoplay agar rantai dimulai fresh.
+ */
+function setSeed(guildId, track) {
+  if (!track?.info) return;
+  seedMap.set(guildId, {
+    title: track.info.title,
+    author: track.info.author,
+    uri: track.info.uri,
+  });
+  autoplayHistoryMap.set(guildId, new Set([track.info.uri]));
+  logger.debug(`Seed set for guild ${guildId}: "${track.info.title}" by ${track.info.author}`);
+}
+
+function getSeed(guildId) {
+  return seedMap.get(guildId) || null;
+}
+
+/**
+ * Update seed setelah lagu autoplay mulai diputar,
+ * agar lagu berikutnya berkaitan dengan yang baru ini.
+ */
+function updateAutoplaySeed(guildId, track) {
+  if (!track?.info) return;
+  seedMap.set(guildId, {
+    title: track.info.title,
+    author: track.info.author,
+    uri: track.info.uri,
+  });
+  if (!autoplayHistoryMap.has(guildId)) autoplayHistoryMap.set(guildId, new Set());
+  const hist = autoplayHistoryMap.get(guildId);
+  hist.add(track.info.uri);
+  // Batasi history agar tidak tumbuh tak terbatas
+  if (hist.size > 100) {
+    const oldest = hist.values().next().value;
+    hist.delete(oldest);
+  }
+  logger.debug(`Autoplay seed updated for guild ${guildId}: "${track.info.title}"`);
+}
+
 // ─── Track Cache ─────────────────────────────────────────────────────────────
 
 function cacheTrack(guildId, track) {
@@ -218,58 +165,66 @@ function getCachedTracks(guildId) { return musicCacheMap.get(guildId) || []; }
 async function handleAutoplay(client, player) {
   if (!getAutoplay(player.guildId)) return;
 
-  const cache = getCachedTracks(player.guildId);
-  const lastTrack = player.queue.previous || (cache.length > 0 ? cache[cache.length - 1] : null);
-  if (!lastTrack) return;
+  // Ambil seed — prioritas: seedMap (di-set oleh ?play atau autoplay sebelumnya)
+  // Fallback ke track terakhir di cache jika belum ada seed
+  let seed = getSeed(player.guildId);
+  if (!seed) {
+    const cache = getCachedTracks(player.guildId);
+    if (cache.length === 0) return;
+    const last = cache[cache.length - 1];
+    seed = { title: last.info.title, author: last.info.author, uri: last.info.uri };
+  }
 
-  const { query, genre } = buildAutoplayQuery(lastTrack, cache);
+  const history = autoplayHistoryMap.get(player.guildId) || new Set();
 
   try {
+    // Cari lagu terkait berdasarkan seed — deterministik, bukan random
+    const query = `${seed.title} ${seed.author}`;
     let result = null;
-    try {
-      result = await player.search(
-        { query, source: 'ytmsearch' },
-        { id: client.user.id, username: 'Autoplay' }
-      );
-    } catch (err) {
-      logger.warn(`Autoplay ytmsearch failed: ${err.message}, trying ytsearch...`);
-      result = await player.search(
-        { query, source: 'ytsearch' },
-        { id: client.user.id, username: 'Autoplay' }
-      );
+
+    for (const source of ['ytmsearch', 'ytsearch']) {
+      try {
+        result = await player.search(
+          { query, source },
+          { id: client.user.id, username: 'Autoplay', isAutoplay: true }
+        );
+        if (result?.tracks?.length > 0) break;
+      } catch (err) {
+        logger.warn(`Autoplay search [${source}] failed: ${err.message}`);
+      }
     }
 
-    if (!result?.tracks?.length) return;
+    if (!result?.tracks?.length) {
+      logger.warn(`Autoplay: tidak ada hasil untuk seed "${seed.title}" di guild ${player.guildId}`);
+      return;
+    }
 
-    const playedUris = new Set(cache.map((t) => t.info.uri));
-    const fresh = result.tracks.filter((t) => !playedUris.has(t.info.uri));
-    const pool = fresh.length > 0 ? fresh : result.tracks;
-    const track = pool[Math.floor(Math.random() * Math.min(5, pool.length))];
+    // Pilih lagu: yang belum ada di riwayat & bukan seed itu sendiri — TANPA random
+    const filtered = result.tracks.filter(
+      (t) => t.info.uri !== seed.uri && !history.has(t.info.uri)
+    );
+    // Fallback: ambil yang bukan seed saja, lalu yang pertama apapun
+    const track =
+      filtered[0] ||
+      result.tracks.find((t) => t.info.uri !== seed.uri) ||
+      result.tracks[0];
+
     if (!track) return;
+
+    // Tandai sebagai lagu autoplay agar lavalinkHandler bisa update seed saat trackStart
+    track.requester = { id: client.user.id, username: 'Autoplay', isAutoplay: true };
 
     await player.queue.add(track);
     await player.play();
-
-    const textChannel = client.channels.cache.get(player.textChannelId);
-    if (textChannel) {
-      const genreLabel = genre ? ` (genre: **${genre}**)` : '';
-      await textChannel.send({
-        content: `🔄 Autoplay${genreLabel}: menambahkan **${track.info.title}** oleh **${track.info.author}**`,
-      }).catch(() => {});
-    }
+    logger.debug(
+      `Autoplay: mengantre "${track.info.title}" berdasarkan seed "${seed.title}" di guild ${player.guildId}`
+    );
   } catch (err) {
-    logger.error(`Autoplay error in guild ${player.guildId}: ${err.message}`);
+    logger.error(`Autoplay error: ${err.message}`);
   }
 }
 
 module.exports = {
-  MAX_VOICE_CHANNELS,
-  activeVoiceChannels,
-  detectGenre,
-  detectSource,
-  getActiveChannelCount,
-  isVoiceChannelActive,
-  releaseVoiceChannel,
   setRadioMode,
   isRadioMode,
   getOrCreatePlayer,
@@ -278,6 +233,9 @@ module.exports = {
   setVoiceStatus,
   setAutoplay,
   getAutoplay,
+  setSeed,
+  getSeed,
+  updateAutoplaySeed,
   cacheTrack,
   getCachedTracks,
   handleAutoplay,

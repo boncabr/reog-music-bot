@@ -1,5 +1,5 @@
 const logger = require('../utils/logger');
-const { setVoiceStatus, cacheTrack, handleAutoplay, isRadioMode } = require('../music/MusicManager');
+const { setVoiceStatus, cacheTrack, handleAutoplay, isRadioMode, getAutoplay, updateAutoplaySeed } = require('../music/MusicManager');
 
 const BOLD_MAP = {
   a:'𝗮',b:'𝗯',c:'𝗰',d:'𝗱',e:'𝗲',f:'𝗳',g:'𝗴',h:'𝗵',i:'𝗶',j:'𝗷',k:'𝗸',l:'𝗹',m:'𝗺',
@@ -60,6 +60,11 @@ async function loadLavalinkEvents(client) {
   client.lavalink.on('trackStart', async (player, track) => {
     try {
       cacheTrack(player.guildId, track);
+
+      // Jika lagu ini hasil autoplay, update seed agar rantai berikutnya relevan
+      if (track.requester?.isAutoplay && getAutoplay(player.guildId)) {
+        updateAutoplaySeed(player.guildId, track);
+      }
 
       const voiceChannel = client.channels.cache.get(player.voiceChannelId);
       if (voiceChannel) {
