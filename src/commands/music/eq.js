@@ -21,6 +21,15 @@ const SMILEY_EQ = [
   { band: 14, gain: 0.2  }, // 16 kHz
 ];
 
+async function sendChannelNotif(client, player, text) {
+  try {
+    const channelId = player.textChannelId;
+    if (!channelId) return;
+    const ch = await client.channels.fetch(channelId).catch(() => null);
+    if (ch?.isTextBased()) await ch.send(text);
+  } catch (_) {}
+}
+
 async function handleEq(client, ctx, modeArg) {
   const isInteraction = ctx.isChatInputCommand?.();
   const guildId = ctx.guild.id;
@@ -42,29 +51,40 @@ async function handleEq(client, ctx, modeArg) {
   }
 
   const mode = (modeArg || '').toLowerCase();
+  const user = ctx.member?.user ?? ctx.user;
 
   if (mode === 'on') {
     await player.filterManager.setEQ(SMILEY_EQ);
+
     const embed = createEmbed({
       color: config.colors.success,
       title: '🎚️ EQ All Genre — ON',
       description:
         '✅ Setting EQ **Smiley Curve** berhasil diterapkan!\n\n' +
-        '🔵 **Bass diboost** — 40-100 Hz\n' +
-        '🟡 **Mid flat/sedikit cut** — 250-400 Hz\n' +
-        '🟢 **Treble diboost** — 2.5-16 kHz',
+        '🔵 **Bass diboost** — 40–100 Hz\n' +
+        '🟡 **Mid flat/sedikit cut** — 250–400 Hz\n' +
+        '🟢 **Treble diboost** — 2.5–16 kHz',
     });
-    return isInteraction ? ctx.reply({ embeds: [embed] }) : ctx.reply({ embeds: [embed] });
+    await (isInteraction ? ctx.reply({ embeds: [embed] }) : ctx.reply({ embeds: [embed] }));
+
+    // Notifikasi singkat ke channel
+    await sendChannelNotif(client, player, `🎚️ **EQ Smiley Curve diaktifkan** oleh ${user}`);
+    return;
   }
 
   if (mode === 'off') {
     await player.filterManager.clearEQ();
+
     const embed = createEmbed({
       color: config.colors.error,
       title: '🎚️ EQ — OFF',
       description: '✅ EQ berhasil direset ke **flat** (normal).',
     });
-    return isInteraction ? ctx.reply({ embeds: [embed] }) : ctx.reply({ embeds: [embed] });
+    await (isInteraction ? ctx.reply({ embeds: [embed] }) : ctx.reply({ embeds: [embed] }));
+
+    // Notifikasi singkat ke channel
+    await sendChannelNotif(client, player, `🎚️ **EQ direset ke flat** oleh ${user}`);
+    return;
   }
 
   const embed = errorEmbed('Gunakan `!eq on` atau `!eq off`');
