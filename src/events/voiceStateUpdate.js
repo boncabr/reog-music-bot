@@ -15,6 +15,18 @@ module.exports = {
       if (oldState.id === botId && !newState.channelId) {
         logger.warn(`Bot was disconnected from voice in guild ${guildId} — scheduling reconnect`);
 
+        // Reset semua filter EQ/efek ke default sebelum reconnect
+        // (player yang sama akan digunakan kembali, jadi filter harus dibersihkan)
+        try {
+          const pCheck = client.lavalink.getPlayer(guildId);
+          if (pCheck?.filterManager) {
+            await pCheck.filterManager.resetFilters();
+            logger.info(`Filters reset after force-disconnect in guild ${guildId}`);
+          }
+        } catch (resetErr) {
+          logger.warn(`Filter reset after disconnect failed: ${resetErr.message}`);
+        }
+
         // Try reconnect up to 3 times with back-off
         let attempts = 0;
         const tryReconnect = async () => {
