@@ -37,8 +37,12 @@ async function getOrCreatePlayer(client, guildId, voiceChannelId, textChannelId)
       instaUpdateFiltersFix: false,
     });
   } else {
-    if (voiceChannelId && player.voiceChannelId !== voiceChannelId) {
-      player.voiceChannelId = voiceChannelId;
+    // Jika bot sudah terhubung ke voice channel lain, tolak — jangan berpindah
+    if (player.connected && voiceChannelId && player.voiceChannelId !== voiceChannelId) {
+      throw new Error(
+        `Bot sedang digunakan di <#${player.voiceChannelId}>. ` +
+        `Tunggu sampai selesai, atau ketik \`?stop\` untuk menghentikannya.`
+      );
     }
     if (textChannelId) {
       player.textChannelId = textChannelId;
