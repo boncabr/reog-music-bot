@@ -5,372 +5,179 @@ const {
   ButtonStyle,
   EmbedBuilder,
 } = require('discord.js');
-const { errorEmbed, createEmbed } = require('../../utils/embeds');
 const config = require('../../config/config');
 const logger = require('../../utils/logger');
 
 // ─────────────────────────────────────────────────────────────────────────────
-// EQ BAND PRESETS
+// PRESET DEFINITIONS
+// Gain range: -0.25 ~ 1.0 (Lavalink spec). Jaga di bawah 0.35 agar tidak clip.
+// speed/pitch: angka float (1.0 = normal). rotationHz: Hz untuk 8D.
+// vibrato: { frequency, depth }. lowPass: angka smoothing.
 // ─────────────────────────────────────────────────────────────────────────────
-
-const flat = () => Array.from({ length: 15 }, (_, i) => ({ band: i, gain: 0.0 }));
 
 const PRESETS = {
   // ── Standard EQ ────────────────────────────────────────────────────────────
   flat: {
-    label: 'Flat',
-    emoji: '🎵',
+    label: 'Flat', emoji: '🎵', style: ButtonStyle.Secondary, color: 0x95a5a6,
     description: 'Reset semua filter ke normal',
-    color: 0x95a5a6,
-    style: ButtonStyle.Secondary,
-    eq: flat(),
-    timescale: null,
-    rotation: null,
-    vibrato: null,
-    lowPass: null,
-    special: null,
+    eq: null, speed: null, pitch: null, rotationHz: null, vibrato: null, lowPass: null,
   },
   bass: {
-    label: 'Bass Boost',
-    emoji: '🔊',
-    description: 'Sub bass & bass kuat — cocok untuk EDM, Hip-Hop',
-    color: 0xe74c3c,
-    style: ButtonStyle.Danger,
+    label: 'Bass Boost', emoji: '🔊', style: ButtonStyle.Danger, color: 0xe74c3c,
+    description: 'Sub bass kuat — cocok untuk EDM, Hip-Hop',
     eq: [
-      { band: 0,  gain: 0.6  },
-      { band: 1,  gain: 0.67 },
-      { band: 2,  gain: 0.67 },
-      { band: 3,  gain: 0.4  },
-      { band: 4,  gain: 0.0  },
-      { band: 5,  gain: -0.2 },
-      { band: 6,  gain: -0.15},
-      { band: 7,  gain: -0.1 },
-      { band: 8,  gain: -0.1 },
-      { band: 9,  gain: 0.0  },
-      { band: 10, gain: 0.0  },
-      { band: 11, gain: 0.0  },
-      { band: 12, gain: 0.0  },
-      { band: 13, gain: 0.0  },
-      { band: 14, gain: 0.0  },
+      { band: 0, gain: 0.3  }, { band: 1, gain: 0.35 }, { band: 2, gain: 0.3  },
+      { band: 3, gain: 0.2  }, { band: 4, gain: 0.0  }, { band: 5, gain: -0.1 },
+      { band: 6, gain: -0.05}, { band: 7, gain: 0.0  }, { band: 8, gain: 0.0  },
+      { band: 9, gain: 0.05 }, { band: 10, gain: 0.05}, { band: 11, gain: 0.0 },
+      { band: 12, gain: 0.0 }, { band: 13, gain: 0.0 }, { band: 14, gain: 0.0 },
     ],
-    timescale: null, rotation: null, vibrato: null, lowPass: null, special: null,
+    speed: null, pitch: null, rotationHz: null, vibrato: null, lowPass: null,
   },
   pop: {
-    label: 'Pop / Vokal',
-    emoji: '🎤',
-    description: 'Vokal jernih & presence tinggi — cocok untuk Pop, K-Pop',
-    color: 0xe91e8c,
-    style: ButtonStyle.Primary,
+    label: 'Pop / Vokal', emoji: '🎤', style: ButtonStyle.Primary, color: 0xe91e8c,
+    description: 'Vokal jernih & presence — cocok untuk Pop, K-Pop',
     eq: [
-      { band: 0,  gain: -0.1 },
-      { band: 1,  gain: -0.1 },
-      { band: 2,  gain: 0.0  },
-      { band: 3,  gain: 0.1  },
-      { band: 4,  gain: 0.2  },
-      { band: 5,  gain: 0.3  },
-      { band: 6,  gain: 0.25 },
-      { band: 7,  gain: 0.15 },
-      { band: 8,  gain: 0.2  },
-      { band: 9,  gain: 0.25 },
-      { band: 10, gain: 0.3  },
-      { band: 11, gain: 0.25 },
-      { band: 12, gain: 0.2  },
-      { band: 13, gain: 0.1  },
-      { band: 14, gain: 0.05 },
+      { band: 0, gain: -0.05}, { band: 1, gain: 0.0  }, { band: 2, gain: 0.05 },
+      { band: 3, gain: 0.1  }, { band: 4, gain: 0.15 }, { band: 5, gain: 0.2  },
+      { band: 6, gain: 0.18 }, { band: 7, gain: 0.15 }, { band: 8, gain: 0.18 },
+      { band: 9, gain: 0.2  }, { band: 10, gain: 0.22}, { band: 11, gain: 0.18},
+      { band: 12, gain: 0.15}, { band: 13, gain: 0.1 }, { band: 14, gain: 0.05},
     ],
-    timescale: null, rotation: null, vibrato: null, lowPass: null, special: null,
+    speed: null, pitch: null, rotationHz: null, vibrato: null, lowPass: null,
   },
   rock: {
-    label: 'Rock',
-    emoji: '🎸',
-    description: 'Mid boost & crunch — cocok untuk Rock, Metal',
-    color: 0xe67e22,
-    style: ButtonStyle.Primary,
+    label: 'Rock', emoji: '🎸', style: ButtonStyle.Primary, color: 0xe67e22,
+    description: 'Mid crunch & bass solid — cocok untuk Rock, Metal',
     eq: [
-      { band: 0,  gain: 0.3  },
-      { band: 1,  gain: 0.25 },
-      { band: 2,  gain: 0.2  },
-      { band: 3,  gain: 0.1  },
-      { band: 4,  gain: -0.1 },
-      { band: 5,  gain: -0.15},
-      { band: 6,  gain: 0.0  },
-      { band: 7,  gain: 0.2  },
-      { band: 8,  gain: 0.25 },
-      { band: 9,  gain: 0.2  },
-      { band: 10, gain: 0.15 },
-      { band: 11, gain: 0.1  },
-      { band: 12, gain: 0.1  },
-      { band: 13, gain: 0.05 },
-      { band: 14, gain: 0.0  },
+      { band: 0, gain: 0.2  }, { band: 1, gain: 0.15 }, { band: 2, gain: 0.1  },
+      { band: 3, gain: 0.05 }, { band: 4, gain: -0.05}, { band: 5, gain: -0.1 },
+      { band: 6, gain: 0.0  }, { band: 7, gain: 0.15 }, { band: 8, gain: 0.2  },
+      { band: 9, gain: 0.15 }, { band: 10, gain: 0.1 }, { band: 11, gain: 0.08},
+      { band: 12, gain: 0.05}, { band: 13, gain: 0.0 }, { band: 14, gain: 0.0 },
     ],
-    timescale: null, rotation: null, vibrato: null, lowPass: null, special: null,
+    speed: null, pitch: null, rotationHz: null, vibrato: null, lowPass: null,
   },
   classical: {
-    label: 'Classical',
-    emoji: '🎹',
+    label: 'Classical', emoji: '🎹', style: ButtonStyle.Primary, color: 0x9b59b6,
     description: 'Treble airy & detail — cocok untuk Klasik, Instrumental',
-    color: 0x9b59b6,
-    style: ButtonStyle.Primary,
     eq: [
-      { band: 0,  gain: 0.0  },
-      { band: 1,  gain: 0.0  },
-      { band: 2,  gain: 0.0  },
-      { band: 3,  gain: 0.0  },
-      { band: 4,  gain: -0.1 },
-      { band: 5,  gain: -0.1 },
-      { band: 6,  gain: -0.05},
-      { band: 7,  gain: 0.0  },
-      { band: 8,  gain: 0.1  },
-      { band: 9,  gain: 0.15 },
-      { band: 10, gain: 0.2  },
-      { band: 11, gain: 0.25 },
-      { band: 12, gain: 0.3  },
-      { band: 13, gain: 0.25 },
-      { band: 14, gain: 0.2  },
+      { band: 0, gain: 0.0  }, { band: 1, gain: 0.0  }, { band: 2, gain: 0.0  },
+      { band: 3, gain: 0.0  }, { band: 4, gain: -0.05}, { band: 5, gain: -0.05},
+      { band: 6, gain: 0.0  }, { band: 7, gain: 0.0  }, { band: 8, gain: 0.1  },
+      { band: 9, gain: 0.12 }, { band: 10, gain: 0.15}, { band: 11, gain: 0.18},
+      { band: 12, gain: 0.2 }, { band: 13, gain: 0.18}, { band: 14, gain: 0.15},
     ],
-    timescale: null, rotation: null, vibrato: null, lowPass: null, special: null,
+    speed: null, pitch: null, rotationHz: null, vibrato: null, lowPass: null,
   },
   lofi: {
-    label: 'Lo-Fi',
-    emoji: '🌊',
+    label: 'Lo-Fi', emoji: '🌊', style: ButtonStyle.Primary, color: 0x1abc9c,
     description: 'Warm & mellow — cocok untuk Lo-Fi, Study, Chill',
-    color: 0x1abc9c,
-    style: ButtonStyle.Primary,
     eq: [
-      { band: 0,  gain: 0.2  },
-      { band: 1,  gain: 0.3  },
-      { band: 2,  gain: 0.2  },
-      { band: 3,  gain: 0.1  },
-      { band: 4,  gain: 0.0  },
-      { band: 5,  gain: -0.1 },
-      { band: 6,  gain: -0.1 },
-      { band: 7,  gain: -0.1 },
-      { band: 8,  gain: -0.15},
-      { band: 9,  gain: -0.2 },
-      { band: 10, gain: -0.3 },
-      { band: 11, gain: -0.35},
-      { band: 12, gain: -0.35},
-      { band: 13, gain: -0.3 },
-      { band: 14, gain: -0.25},
+      { band: 0, gain: 0.15 }, { band: 1, gain: 0.2  }, { band: 2, gain: 0.15 },
+      { band: 3, gain: 0.08 }, { band: 4, gain: 0.0  }, { band: 5, gain: -0.05},
+      { band: 6, gain: -0.08}, { band: 7, gain: -0.1 }, { band: 8, gain: -0.1 },
+      { band: 9, gain: -0.12}, { band: 10, gain: -0.18},{ band: 11, gain: -0.2},
+      { band: 12, gain: -0.2}, { band: 13, gain: -0.18},{ band: 14, gain: -0.15},
     ],
-    timescale: null, rotation: null, vibrato: null, lowPass: { smoothing: 20 }, special: null,
+    speed: null, pitch: null, rotationHz: null, vibrato: null, lowPass: 8,
   },
   jazz: {
-    label: 'Jazz',
-    emoji: '🎷',
-    description: 'Warm mids & no harsh highs — cocok untuk Jazz, Blues, Soul',
-    color: 0xf39c12,
-    style: ButtonStyle.Primary,
+    label: 'Jazz', emoji: '🎷', style: ButtonStyle.Primary, color: 0xf39c12,
+    description: 'Warm mids — cocok untuk Jazz, Blues, Soul',
     eq: [
-      { band: 0,  gain: 0.1  },
-      { band: 1,  gain: 0.15 },
-      { band: 2,  gain: 0.1  },
-      { band: 3,  gain: 0.0  },
-      { band: 4,  gain: 0.05 },
-      { band: 5,  gain: 0.15 },
-      { band: 6,  gain: 0.2  },
-      { band: 7,  gain: 0.15 },
-      { band: 8,  gain: 0.1  },
-      { band: 9,  gain: 0.05 },
-      { band: 10, gain: 0.0  },
-      { band: 11, gain: -0.05},
-      { band: 12, gain: -0.1 },
-      { band: 13, gain: -0.1 },
-      { band: 14, gain: -0.1 },
+      { band: 0, gain: 0.08 }, { band: 1, gain: 0.1  }, { band: 2, gain: 0.08 },
+      { band: 3, gain: 0.0  }, { band: 4, gain: 0.05 }, { band: 5, gain: 0.12 },
+      { band: 6, gain: 0.15 }, { band: 7, gain: 0.12 }, { band: 8, gain: 0.08 },
+      { band: 9, gain: 0.05 }, { band: 10, gain: 0.0 }, { band: 11, gain: -0.05},
+      { band: 12, gain: -0.08},{ band: 13, gain: -0.08},{ band: 14, gain: -0.05},
     ],
-    timescale: null, rotation: null, vibrato: null, lowPass: null, special: null,
+    speed: null, pitch: null, rotationHz: null, vibrato: null, lowPass: null,
   },
   gaming: {
-    label: 'Gaming',
-    emoji: '🎮',
+    label: 'Gaming', emoji: '🎮', style: ButtonStyle.Success, color: 0x2ecc71,
     description: 'High clarity & detail — cocok untuk soundtrack game',
-    color: 0x2ecc71,
-    style: ButtonStyle.Success,
     eq: [
-      { band: 0,  gain: 0.15 },
-      { band: 1,  gain: 0.1  },
-      { band: 2,  gain: 0.0  },
-      { band: 3,  gain: -0.1 },
-      { band: 4,  gain: -0.1 },
-      { band: 5,  gain: 0.0  },
-      { band: 6,  gain: 0.1  },
-      { band: 7,  gain: 0.15 },
-      { band: 8,  gain: 0.2  },
-      { band: 9,  gain: 0.25 },
-      { band: 10, gain: 0.3  },
-      { band: 11, gain: 0.25 },
-      { band: 12, gain: 0.2  },
-      { band: 13, gain: 0.15 },
-      { band: 14, gain: 0.1  },
+      { band: 0, gain: 0.1  }, { band: 1, gain: 0.08 }, { band: 2, gain: 0.0  },
+      { band: 3, gain: -0.05}, { band: 4, gain: -0.05}, { band: 5, gain: 0.0  },
+      { band: 6, gain: 0.08 }, { band: 7, gain: 0.12 }, { band: 8, gain: 0.15 },
+      { band: 9, gain: 0.18 }, { band: 10, gain: 0.2 }, { band: 11, gain: 0.18},
+      { band: 12, gain: 0.15}, { band: 13, gain: 0.1 }, { band: 14, gain: 0.08},
     ],
-    timescale: null, rotation: null, vibrato: null, lowPass: null, special: null,
+    speed: null, pitch: null, rotationHz: null, vibrato: null, lowPass: null,
   },
 
-  // ── Special Effects — Ciri Khas Reog Bot ────────────────────────────────────
-
+  // ── Efek Spesial — Ciri Khas Reog Bot ──────────────────────────────────────
   malam_minggu: {
-    label: 'Malam Minggu',
-    emoji: '🌃',
+    label: 'Malam Minggu', emoji: '🌃', style: ButtonStyle.Secondary, color: 0x2c3e7a,
     description: '✨ Slow & hangat — feel malam Minggu bareng gebetan',
-    color: 0x2c3e7a,
-    style: ButtonStyle.Secondary,
     eq: [
-      { band: 0,  gain: 0.2  },
-      { band: 1,  gain: 0.3  },
-      { band: 2,  gain: 0.2  },
-      { band: 3,  gain: 0.1  },
-      { band: 4,  gain: 0.0  },
-      { band: 5,  gain: 0.1  },
-      { band: 6,  gain: 0.15 },
-      { band: 7,  gain: 0.1  },
-      { band: 8,  gain: 0.05 },
-      { band: 9,  gain: 0.0  },
-      { band: 10, gain: -0.1 },
-      { band: 11, gain: -0.15},
-      { band: 12, gain: -0.15},
-      { band: 13, gain: -0.1 },
-      { band: 14, gain: -0.05},
+      { band: 0, gain: 0.15 }, { band: 1, gain: 0.2  }, { band: 2, gain: 0.15 },
+      { band: 3, gain: 0.08 }, { band: 4, gain: 0.0  }, { band: 5, gain: 0.05 },
+      { band: 6, gain: 0.1  }, { band: 7, gain: 0.08 }, { band: 8, gain: 0.05 },
+      { band: 9, gain: 0.0  }, { band: 10, gain: -0.05},{ band: 11, gain: -0.08},
+      { band: 12, gain: -0.08},{ band: 13, gain: -0.05},{ band: 14, gain: 0.0 },
     ],
-    timescale: { speed: 0.92, pitch: 0.97, rate: 1.0 },
-    rotation: null, vibrato: null, lowPass: { smoothing: 10 }, special: null,
+    speed: 0.92, pitch: 0.97, rotationHz: null, vibrato: null, lowPass: null,
   },
   audio_8d: {
-    label: '8D Audio',
-    emoji: '🎡',
-    description: '✨ Berputar di telinga — pakai headset/earphone!',
-    color: 0x8e44ad,
-    style: ButtonStyle.Secondary,
-    eq: [
-      { band: 0,  gain: 0.0  },
-      { band: 1,  gain: 0.0  },
-      { band: 2,  gain: 0.0  },
-      { band: 3,  gain: 0.0  },
-      { band: 4,  gain: 0.0  },
-      { band: 5,  gain: 0.0  },
-      { band: 6,  gain: 0.0  },
-      { band: 7,  gain: 0.1  },
-      { band: 8,  gain: 0.1  },
-      { band: 9,  gain: 0.05 },
-      { band: 10, gain: 0.0  },
-      { band: 11, gain: 0.0  },
-      { band: 12, gain: 0.0  },
-      { band: 13, gain: 0.0  },
-      { band: 14, gain: 0.0  },
-    ],
-    timescale: null,
-    rotation: { rotationHz: 0.2 },
-    vibrato: null, lowPass: null, special: '🎡 Pakai headset/earphone untuk efek terbaik!',
+    label: '8D Audio', emoji: '🎡', style: ButtonStyle.Secondary, color: 0x8e44ad,
+    description: '✨ Suara berputar di telinga — pakai headset!',
+    eq: null,
+    speed: null, pitch: null, rotationHz: 0.2, vibrato: null, lowPass: null,
   },
   nightcore: {
-    label: 'Nightcore',
-    emoji: '🚀',
-    description: '✨ Speed up + pitch up — anime/EDM feel',
-    color: 0x3498db,
-    style: ButtonStyle.Secondary,
+    label: 'Nightcore', emoji: '🚀', style: ButtonStyle.Secondary, color: 0x3498db,
+    description: '✨ Speed up + pitch naik — anime/EDM vibe',
     eq: [
-      { band: 0,  gain: 0.0  },
-      { band: 1,  gain: 0.0  },
-      { band: 2,  gain: 0.0  },
-      { band: 3,  gain: -0.1 },
-      { band: 4,  gain: -0.05},
-      { band: 5,  gain: 0.0  },
-      { band: 6,  gain: 0.05 },
-      { band: 7,  gain: 0.1  },
-      { band: 8,  gain: 0.15 },
-      { band: 9,  gain: 0.2  },
-      { band: 10, gain: 0.2  },
-      { band: 11, gain: 0.15 },
-      { band: 12, gain: 0.1  },
-      { band: 13, gain: 0.05 },
-      { band: 14, gain: 0.0  },
+      { band: 0, gain: 0.0  }, { band: 1, gain: 0.0  }, { band: 2, gain: -0.05},
+      { band: 3, gain: -0.05}, { band: 4, gain: 0.0  }, { band: 5, gain: 0.0  },
+      { band: 6, gain: 0.05 }, { band: 7, gain: 0.08 }, { band: 8, gain: 0.1  },
+      { band: 9, gain: 0.12 }, { band: 10, gain: 0.12},{ band: 11, gain: 0.1 },
+      { band: 12, gain: 0.08},{ band: 13, gain: 0.05},{ band: 14, gain: 0.0  },
     ],
-    timescale: { speed: 1.25, pitch: 1.25, rate: 1.0 },
-    rotation: null, vibrato: null, lowPass: null, special: null,
+    speed: 1.25, pitch: 1.25, rotationHz: null, vibrato: null, lowPass: null,
   },
   ghost: {
-    label: 'Ghost Mode',
-    emoji: '👻',
+    label: 'Ghost Mode', emoji: '👻', style: ButtonStyle.Secondary, color: 0x4a4a6a,
     description: '✨ Pitch turun + gemetar — nuansa horror/misteri',
-    color: 0x4a4a6a,
-    style: ButtonStyle.Secondary,
     eq: [
-      { band: 0,  gain: 0.3  },
-      { band: 1,  gain: 0.2  },
-      { band: 2,  gain: 0.1  },
-      { band: 3,  gain: 0.0  },
-      { band: 4,  gain: -0.1 },
-      { band: 5,  gain: -0.1 },
-      { band: 6,  gain: -0.05},
-      { band: 7,  gain: 0.0  },
-      { band: 8,  gain: -0.05},
-      { band: 9,  gain: -0.1 },
-      { band: 10, gain: -0.15},
-      { band: 11, gain: -0.2 },
-      { band: 12, gain: -0.2 },
-      { band: 13, gain: -0.15},
-      { band: 14, gain: -0.1 },
+      { band: 0, gain: 0.2  }, { band: 1, gain: 0.15 }, { band: 2, gain: 0.1  },
+      { band: 3, gain: 0.0  }, { band: 4, gain: -0.05}, { band: 5, gain: -0.08},
+      { band: 6, gain: -0.05}, { band: 7, gain: 0.0  }, { band: 8, gain: -0.05},
+      { band: 9, gain: -0.08},{ band: 10, gain: -0.1 },{ band: 11, gain: -0.12},
+      { band: 12, gain: -0.12},{ band: 13, gain: -0.1 },{ band: 14, gain: -0.05},
     ],
-    timescale: { speed: 0.88, pitch: 0.75, rate: 1.0 },
-    rotation: null,
-    vibrato: { frequency: 4.0, depth: 0.65 },
-    lowPass: null, special: null,
+    speed: 0.88, pitch: 0.75, rotationHz: null, vibrato: { frequency: 4.0, depth: 0.6 }, lowPass: null,
   },
   koplo: {
-    label: 'Koplo Turbo',
-    emoji: '🎭',
+    label: 'Koplo Turbo', emoji: '🎭', style: ButtonStyle.Secondary, color: 0xc0392b,
     description: '✨ Speed up + bass kenceng — feel Dangdut Koplo!',
-    color: 0xc0392b,
-    style: ButtonStyle.Secondary,
     eq: [
-      { band: 0,  gain: 0.5  },
-      { band: 1,  gain: 0.6  },
-      { band: 2,  gain: 0.5  },
-      { band: 3,  gain: 0.3  },
-      { band: 4,  gain: 0.1  },
-      { band: 5,  gain: 0.0  },
-      { band: 6,  gain: 0.05 },
-      { band: 7,  gain: 0.1  },
-      { band: 8,  gain: 0.1  },
-      { band: 9,  gain: 0.05 },
-      { band: 10, gain: 0.0  },
-      { band: 11, gain: 0.0  },
-      { band: 12, gain: 0.0  },
-      { band: 13, gain: 0.0  },
-      { band: 14, gain: 0.0  },
+      { band: 0, gain: 0.3  }, { band: 1, gain: 0.35 }, { band: 2, gain: 0.3  },
+      { band: 3, gain: 0.15 }, { band: 4, gain: 0.05 }, { band: 5, gain: 0.0  },
+      { band: 6, gain: 0.05 }, { band: 7, gain: 0.08 }, { band: 8, gain: 0.08 },
+      { band: 9, gain: 0.05 }, { band: 10, gain: 0.0 },{ band: 11, gain: 0.0  },
+      { band: 12, gain: 0.0 },{ band: 13, gain: 0.0  },{ band: 14, gain: 0.0  },
     ],
-    timescale: { speed: 1.18, pitch: 1.0, rate: 1.0 },
-    rotation: null, vibrato: null, lowPass: null, special: null,
+    speed: 1.18, pitch: 1.0, rotationHz: null, vibrato: null, lowPass: null,
   },
   vaporwave: {
-    label: 'Vaporwave',
-    emoji: '💜',
+    label: 'Vaporwave', emoji: '💜', style: ButtonStyle.Secondary, color: 0x9b59b6,
     description: '✨ Slow + pitch turun — aesthetic retro 80s',
-    color: 0x9b59b6,
-    style: ButtonStyle.Secondary,
     eq: [
-      { band: 0,  gain: 0.15 },
-      { band: 1,  gain: 0.25 },
-      { band: 2,  gain: 0.2  },
-      { band: 3,  gain: 0.1  },
-      { band: 4,  gain: 0.05 },
-      { band: 5,  gain: 0.1  },
-      { band: 6,  gain: 0.15 },
-      { band: 7,  gain: 0.1  },
-      { band: 8,  gain: 0.0  },
-      { band: 9,  gain: -0.1 },
-      { band: 10, gain: -0.2 },
-      { band: 11, gain: -0.25},
-      { band: 12, gain: -0.25},
-      { band: 13, gain: -0.2 },
-      { band: 14, gain: -0.15},
+      { band: 0, gain: 0.1  }, { band: 1, gain: 0.15 }, { band: 2, gain: 0.12 },
+      { band: 3, gain: 0.08 }, { band: 4, gain: 0.05 }, { band: 5, gain: 0.08 },
+      { band: 6, gain: 0.1  }, { band: 7, gain: 0.08 }, { band: 8, gain: 0.0  },
+      { band: 9, gain: -0.05},{ band: 10, gain: -0.1 },{ band: 11, gain: -0.15},
+      { band: 12, gain: -0.15},{ band: 13, gain: -0.1 },{ band: 14, gain: -0.08},
     ],
-    timescale: { speed: 0.8, pitch: 0.85, rate: 1.0 },
-    rotation: null, vibrato: null, lowPass: { smoothing: 15 }, special: null,
+    speed: 0.8, pitch: 0.85, rotationHz: null, vibrato: null, lowPass: null,
   },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// BUILD BUTTON ROWS
+// BUILD BUTTON ROWS (maks 5 tombol per baris)
 // ─────────────────────────────────────────────────────────────────────────────
 
 function buildEqRows() {
@@ -393,36 +200,27 @@ function buildEqRows() {
   return rows;
 }
 
-function buildEqMenuEmbed(currentPreset) {
-  const lines = [];
+function buildEqMenuEmbed() {
+  const standardKeys = ['flat','bass','pop','rock','classical','lofi','jazz','gaming'];
+  const specialKeys  = ['malam_minggu','audio_8d','nightcore','ghost','koplo','vaporwave'];
 
-  lines.push('**🎚️ Pilih preset EQ atau efek spesial dengan tombol di bawah!**\n');
-  lines.push('**── Standard EQ ──**');
-  for (const [key, p] of Object.entries(PRESETS)) {
-    if (!p.special && !p.timescale && !p.rotation && !p.vibrato && key !== 'malam_minggu' && key !== 'lofi') {
-      const active = currentPreset === key ? ' ◀ **aktif**' : '';
-      lines.push(`${p.emoji} **${p.label}**${active} — ${p.description}`);
-    }
-  }
-
-  lines.push('\n**── Efek Spesial 🌟 Ciri Khas Reog ──**');
-  const specialKeys = ['malam_minggu', 'audio_8d', 'nightcore', 'ghost', 'koplo', 'vaporwave'];
-  for (const key of specialKeys) {
-    const p = PRESETS[key];
-    const active = currentPreset === key ? ' ◀ **aktif**' : '';
-    lines.push(`${p.emoji} **${p.label}**${active} — ${p.description}`);
-  }
+  const stdLines = standardKeys.map(k => `${PRESETS[k].emoji} **${PRESETS[k].label}** — ${PRESETS[k].description}`);
+  const spcLines = specialKeys.map(k => `${PRESETS[k].emoji} **${PRESETS[k].label}** — ${PRESETS[k].description}`);
 
   return new EmbedBuilder()
     .setColor(config.colors.primary)
     .setTitle('🎛️ Reog EQ & Sound Effects')
-    .setDescription(lines.join('\n'))
-    .setFooter({ text: currentPreset ? `Preset aktif: ${PRESETS[currentPreset]?.label || currentPreset}` : 'Tekan tombol untuk memilih preset' })
+    .setDescription(
+      '**🎚️ Pilih preset dengan tombol di bawah ini!**\n\n' +
+      '**── Standard EQ ──**\n' + stdLines.join('\n') +
+      '\n\n**── 🌟 Efek Spesial Ciri Khas Reog ──**\n' + spcLines.join('\n')
+    )
+    .setFooter({ text: 'Tekan tombol untuk menerapkan preset' })
     .setTimestamp();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// APPLY PRESET
+// APPLY PRESET — menggunakan API lavalink-client v2 yang benar
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function applyPreset(player, presetKey) {
@@ -431,35 +229,40 @@ async function applyPreset(player, presetKey) {
 
   const fm = player.filterManager;
 
-  // Reset semua filter dulu sebelum apply preset baru
-  try { await fm.resetFilters(); } catch (_) {}
+  // 1. Reset semua filter ke default dulu
+  await fm.resetFilters();
 
-  // Apply EQ bands
-  if (preset.eq) await fm.setEQ(preset.eq);
-
-  // Apply timescale (speed/pitch)
-  if (preset.timescale) {
-    await fm.setTimescale(preset.timescale);
+  // 2. Apply EQ bands (jika bukan flat)
+  if (preset.eq) {
+    await fm.setEQ(preset.eq);
   }
 
-  // Apply rotation (8D Audio)
-  if (preset.rotation) {
-    await fm.setRotation(preset.rotation);
+  // 3. Apply timescale — setSpeed & setPitch secara terpisah
+  if (preset.speed != null) {
+    await fm.setSpeed(preset.speed);
+  }
+  if (preset.pitch != null) {
+    await fm.setPitch(preset.pitch);
   }
 
-  // Apply vibrato
-  if (preset.vibrato) {
-    await fm.setVibrato(preset.vibrato);
+  // 4. Apply 8D rotation — toggleRotation(hz)
+  if (preset.rotationHz != null) {
+    await fm.toggleRotation(preset.rotationHz);
   }
 
-  // Apply low pass
-  if (preset.lowPass) {
-    await fm.setLowPass(preset.lowPass);
+  // 5. Apply vibrato — toggleVibrato(frequency, depth)
+  if (preset.vibrato != null) {
+    await fm.toggleVibrato(preset.vibrato.frequency, preset.vibrato.depth);
+  }
+
+  // 6. Apply low pass — toggleLowPass(smoothing)
+  if (preset.lowPass != null) {
+    await fm.toggleLowPass(preset.lowPass);
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// BUTTON HANDLER (dipanggil dari interactionCreate.js)
+// BUTTON HANDLER — dipanggil dari interactionCreate.js
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function handleEqButton(client, interaction) {
@@ -490,15 +293,14 @@ async function handleEqButton(client, interaction) {
   try {
     await applyPreset(player, presetKey);
 
-    const isSpecial = ['malam_minggu', 'audio_8d', 'nightcore', 'ghost', 'koplo', 'vaporwave'].includes(presetKey);
+    const isSpecial = ['malam_minggu','audio_8d','nightcore','ghost','koplo','vaporwave'].includes(presetKey);
 
     const embed = new EmbedBuilder()
       .setColor(preset.color)
       .setTitle(`${preset.emoji} ${preset.label} — Aktif!`)
       .setDescription(
-        `✅ Preset **${preset.label}** berhasil diterapkan!\n\n` +
-        `> ${preset.description}` +
-        (preset.special ? `\n\n💡 ${preset.special}` : '') +
+        `✅ Preset **${preset.label}** berhasil diterapkan!\n\n> ${preset.description}` +
+        (presetKey === 'audio_8d' ? '\n\n💡 Pakai **headset/earphone** untuk efek terbaik!' : '') +
         (isSpecial ? '\n\n🌟 *Efek spesial ciri khas Reog Bot*' : '')
       )
       .setFooter({ text: `Diminta oleh ${interaction.user.username}` })
@@ -507,7 +309,7 @@ async function handleEqButton(client, interaction) {
     await interaction.editReply({ embeds: [embed] });
     logger.info(`EQ preset "${presetKey}" applied in guild ${guildId} by ${interaction.user.tag}`);
   } catch (err) {
-    logger.error(`EQ apply error: ${err.message}`);
+    logger.error(`EQ apply error [${presetKey}]: ${err.message}`);
     await interaction.editReply({
       embeds: [new EmbedBuilder().setColor(config.colors.error).setDescription(`❌ Gagal menerapkan preset: ${err.message}`)],
     });
@@ -540,7 +342,7 @@ async function handleEq(client, ctx) {
       : ctx.reply({ embeds: [embed] });
   }
 
-  const menuEmbed = buildEqMenuEmbed(null);
+  const menuEmbed = buildEqMenuEmbed();
   const rows = buildEqRows();
 
   return isInteraction
