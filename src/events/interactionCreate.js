@@ -1,6 +1,7 @@
 const { checkCooldown } = require('../utils/cooldown');
 const { errorEmbed } = require('../utils/embeds');
 const { handleCommandError } = require('../utils/errorHandler');
+const { setAutoplay, getAutoplay } = require('../music/MusicManager');
 const config = require('../config/config');
 const logger = require('../utils/logger');
 
@@ -42,6 +43,12 @@ module.exports = {
         embeds: [errorEmbed(`Tunggu **${remaining}s** lagi sebelum menggunakan perintah ini.`)],
         ephemeral: true,
       });
+    }
+
+    // Jika user menjalankan slash command apapun SELAIN /autoplay, matikan autoplay
+    if (interaction.commandName !== 'autoplay' && interaction.guild && getAutoplay(interaction.guild.id)) {
+      setAutoplay(interaction.guild.id, false);
+      logger.debug(`Autoplay dimatikan karena slash command "/${interaction.commandName}" di guild ${interaction.guild.id}`);
     }
 
     try {
