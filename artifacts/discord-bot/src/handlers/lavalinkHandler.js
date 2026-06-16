@@ -92,76 +92,109 @@ async function loadLavalinkEvents(client) {
   });
 
   client.lavalink.on('trackStuck', async (player, track) => {
-    const retryKey = `${player.guildId}:${track?.info?.uri}`;
-    const retries = stuckRetryMap.get(retryKey) || 0;
+    const title     = track?.info?.title || 'Unknown';
+    const uri       = track?.info?.uri   || '';
+    const duration  = track?.info?.duration || 0;
+    const retryKey  = `${player.guildId}:${uri}`;
+    const retries   = stuckRetryMap.get(retryKey) || 0;
 
-    logger.warn(`Track stuck: "${track.info.title}" in guild ${player.guildId} — retry #${retries}`);
+    logger.warn(`Track stuck: "${title}" in guild ${player.guildId} — retry #${retries} — ${Math.round(duration / 60000)}min`);
 
     const textChannel = client.channels.cache.get(player.textChannelId);
 
-    // Coba ulang maksimal 1x dengan mencari URL stream baru
+    // ── Helper: selalu paksa maju ke lagu berikutnya ─────────────────────────
+    const forceAdvance = async () => {
+      try {
+        // player.skip() aman dipanggil meski queue kosong —
+        // lavalink-client akan trigger queueEnd secara otomatis
+        await player.skip();
+      } catch (skipErr) {
+        logger.warn(`forceAdvance skip failed: ${skipErr.message}`);
+      }
+    };
+
+    // ── Track panjang (> 20 menit) = mix / full album ─────────────────────────
+    // Jangan retry dari awal — langsung lewati ke lagu berikutnya secara diam-diam
+    if (duration > 20 * 60 * 1000) {
+      logger.warn(`Long track stuck (${Math.round(duration / 60000)}min) — skipping without retry`);
+      stuckRetryMap.delete(retryKey);
+      if (textChannel) {
+        await textChannel.send({
+          content: `⏭️ **${title}** dilewati (stream terputus).`
+        }).catch(() => {});
+      }
+      await forceAdvance();
+      return;
+    }
+
+    // ── Coba ulang maksimal 1x (hanya untuk track pendek) ────────────────────
     if (retries < 1) {
       stuckRetryMap.set(retryKey, retries + 1);
-      // Hapus retry key setelah 2 menit agar lagu yang sama bisa dicoba lagi nanti
       setTimeout(() => stuckRetryMap.delete(retryKey), 120000);
 
       try {
-        const title = track.info?.title;
         const author = track.info?.author;
-        const query = author ? `${title} ${author}` : title;
-
-        // Cari URL stream baru untuk lagu yang sama
+        const query  = author ? `${title} ${author}` : title;
         let freshResult = null;
 
-        // Coba YouTube URL langsung jika ada
-        if (track.info?.uri && /youtube\.com|youtu\.be/i.test(track.info.uri)) {
+        // Coba re-load via URI YouTube — tapi buang jika URI sama (pasti stuck lagi)
+        if (/youtube\.com|youtu\.be/i.test(uri)) {
           try {
-            freshResult = await player.search({ query: track.info.uri }, track.requester || { id: client.user.id, username: 'Retry' });
-            if (!freshResult?.tracks?.length) freshResult = null;
-          } catch (_) { freshResult = null; }
+            const r = await player.search({ query: uri }, track.requester || { id: client.user.id, username: 'Retry' });
+            // Tolak jika hasil pertama punya URI yang sama — stream-nya sama saja
+            if (r?.tracks?.length && r.tracks[0].info.uri !== uri) {
+              freshResult = r;
+            }
+          } catch (_) {}
         }
 
-        // Fallback: search by title+author
-        if (!freshResult || !freshResult.tracks?.length) {
-          freshResult = await player.search(
+        // Fallback: cari dari SoundCloud (sumber berbeda, tidak akan dapat URI sama)
+        if (!freshResult) {
+          const scResult = await player.search(
+            { query, source: 'scsearch' },
+            track.requester || { id: client.user.id, username: 'Retry' }
+          ).catch(() => null);
+          if (scResult?.tracks?.length) freshResult = scResult;
+        }
+
+        // Fallback terakhir: cari YouTube dengan judul saja (bukan URI)
+        if (!freshResult) {
+          const ytResult = await player.search(
             { query, source: 'ytsearch' },
             track.requester || { id: client.user.id, username: 'Retry' }
-          );
+          ).catch(() => null);
+          // Tolak jika URI sama
+          if (ytResult?.tracks?.length && ytResult.tracks[0].info.uri !== uri) {
+            freshResult = ytResult;
+          }
         }
 
-        if (freshResult?.tracks?.length > 0) {
-          const freshTrack = freshResult.tracks[0];
-          // Sisipkan lagu baru di depan antrian, lalu skip yang stuck
-          await player.queue.add(freshTrack, 0);
+        if (freshResult?.tracks?.length) {
+          await player.queue.add(freshResult.tracks[0], 0);
           await player.skip();
-
           if (textChannel) {
             await textChannel.send({
-              content: `🔄 **${track.info.title}** mengalami gangguan, mencoba ulang...`
+              content: `🔄 **${title}** mengalami gangguan, mencoba dari sumber lain...`
             }).catch(() => {});
           }
-          logger.info(`Track stuck retry OK: "${track.info.title}" — fresh stream queued`);
+          logger.info(`Track stuck retry OK: "${title}" — alternative source queued`);
           return;
         }
       } catch (err) {
-        logger.warn(`Stuck retry search failed for "${track.info?.title}": ${err.message}`);
+        logger.warn(`Stuck retry failed for "${title}": ${err.message}`);
       }
     }
 
-    // Retry gagal atau batas retry tercapai — lewati ke lagu berikutnya
+    // ── Retry gagal atau batas tercapai — paksa lewati ───────────────────────
     stuckRetryMap.delete(retryKey);
-    logger.warn(`Track stuck — giving up on "${track.info.title}", skipping`);
+    logger.warn(`Track stuck — giving up on "${title}", forcing advance`);
 
-    try {
-      if (textChannel) {
-        await textChannel.send({
-          content: `⚠️ **${track.info.title}** tidak bisa diputar, melewati ke lagu berikutnya.`
-        }).catch(() => {});
-      }
-      if (player.queue.tracks.length > 0) await player.skip();
-    } catch (err) {
-      logger.error(`trackStuck skip error: ${err.message}`);
+    if (textChannel) {
+      await textChannel.send({
+        content: `⏭️ **${title}** tidak bisa diputar, melewati ke lagu berikutnya.`
+      }).catch(() => {});
     }
+    await forceAdvance();
   });
 
   client.lavalink.on('trackError', async (player, track, payload) => {
