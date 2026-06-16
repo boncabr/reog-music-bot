@@ -1,5 +1,5 @@
 const logger = require('../utils/logger');
-const { isRadioMode, setAutoplay } = require('../music/MusicManager');
+const { isRadioMode, setAutoplay, clearVoiceEmoji } = require('../music/MusicManager');
 
 module.exports = {
   name: 'voiceStateUpdate',
@@ -30,6 +30,8 @@ module.exports = {
         // Matikan autoplay saat bot keluar dari VC
         setAutoplay(guildId, false);
         logger.debug(`Autoplay dimatikan karena bot keluar dari VC di guild ${guildId}`);
+        // Reset emoji ke default saat bot keluar VC (force-disconnect)
+        clearVoiceEmoji(guildId);
 
         // Try reconnect up to 3 times with back-off
         let attempts = 0;
