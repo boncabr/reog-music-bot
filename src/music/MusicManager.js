@@ -6,6 +6,7 @@ const musicCacheMap = new Map();
 const radioModeMap = new Map();
 const seedMap = new Map();            // { title, author, uri, identifier }
 const autoplayHistoryMap = new Map(); // Set<uri> — sudah diputar dalam sesi autoplay
+const voiceEmojiMap = new Map();      // guildId → custom emoji string
 
 // ─── Radio Mode ───────────────────────────────────────────────────────────────
 
@@ -291,6 +292,10 @@ async function handleAutoplay(client, player) {
 
 function guildId(player) { return player.guildId; }
 
+function setVoiceEmoji(guildId, emoji) { voiceEmojiMap.set(guildId, emoji); }
+function getVoiceEmoji(guildId) { return voiceEmojiMap.get(guildId) || null; }
+function clearVoiceEmoji(guildId) { voiceEmojiMap.delete(guildId); }
+
 module.exports = {
   setRadioMode,
   isRadioMode,
@@ -307,4 +312,7 @@ module.exports = {
   cacheTrack,
   getCachedTracks,
   handleAutoplay,
+  setVoiceEmoji,
+  getVoiceEmoji,
+  clearVoiceEmoji,
 };
