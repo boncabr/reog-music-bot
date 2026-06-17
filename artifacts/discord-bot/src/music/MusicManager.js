@@ -296,6 +296,20 @@ function setVoiceEmoji(guildId, emoji) { voiceEmojiMap.set(guildId, emoji); }
 function getVoiceEmoji(guildId) { return voiceEmojiMap.get(guildId) || null; }
 function clearVoiceEmoji(guildId) { voiceEmojiMap.delete(guildId); }
 
+
+function cleanTitle(title) {
+  if (!title) return title;
+  let t = title;
+  const dash = t.indexOf(" - ");
+  if (dash > 0) t = t.slice(dash + 3);
+  t = t
+    .replace(/s*[.*?]/g, "")
+    .replace(/s*((?:official|lyric|audio|video|mv|hd)[^)]*)/gi, "")
+    .replace(/s*ft..*$/i, "")
+    .replace(/s*feat..*$/i, "")
+    .trim();
+  return t || title;
+}
 module.exports = {
   setRadioMode,
   isRadioMode,
@@ -315,4 +329,5 @@ module.exports = {
   setVoiceEmoji,
   getVoiceEmoji,
   clearVoiceEmoji,
+  cleanTitle,
 };
