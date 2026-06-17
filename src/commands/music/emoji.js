@@ -1,6 +1,6 @@
 const { SlashCommandBuilder } = require('discord.js');
 const { errorEmbed, createEmbed } = require('../../utils/embeds');
-const { setVoiceEmoji, getVoiceEmoji, clearVoiceEmoji, setVoiceStatus } = require('../../music/MusicManager');
+const { setVoiceEmoji, getVoiceEmoji, clearVoiceEmoji, setVoiceStatus, cleanTitle } = require('../../music/MusicManager');
 const config = require('../../config/config');
 const logger = require('../../utils/logger');
 
@@ -27,7 +27,7 @@ async function handleEmoji(client, ctx, args) {
         || player.voiceChannelId
         || player.options?.voiceChannelId;
       if (vcId) {
-        const status = `**${track.info.title}**`;
+        const status = `**${cleanTitle(track.info.title)}**`;
         await setVoiceStatus(client, guildId, vcId, status);
       }
     }
@@ -93,7 +93,7 @@ async function handleEmoji(client, ctx, args) {
       const player = client.lavalink.getPlayer(guildId);
       if (player?.queue?.current) {
         const track = player.queue.current;
-        const status = `**${track.info.title}**`;
+        const status = `**${cleanTitle(track.info.title)}**`;
         await setVoiceStatus(client, guildId, player.voiceChannelId, status).catch(() => {});
       }
       const resetEmbed = createEmbed({
@@ -144,9 +144,9 @@ async function handleEmoji(client, ctx, args) {
       logger.debug(`emoji setVoiceStatus: vcId=${vcId} guildId=${guildId}`);
 
       if (vcId) {
-        const status = `${emoji} **${track.info.title}**`;
+        const status = `${emoji} **${cleanTitle(track.info.title)}**`;
         await setVoiceStatus(client, guildId, vcId, status);
-        preview = `\n\n🎵 Voice status: \`${emoji} **${track.info.title}**\``;
+        preview = `\n\n🎵 Voice status: \`${emoji} **${cleanTitle(track.info.title)}**\``;
       } else {
         logger.warn(`emoji: cannot find voiceChannelId in guild ${guildId}`);
         preview = `\n\n_(Emoji akan tampil di voice status saat track berikutnya mulai)_`;
