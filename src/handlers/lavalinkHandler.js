@@ -1,5 +1,5 @@
 const logger = require('../utils/logger');
-const { setVoiceStatus, cacheTrack, handleAutoplay, isRadioMode, getAutoplay, setAutoplay, updateAutoplaySeed, getVoiceEmoji, clearVoiceEmoji } = require('../music/MusicManager');
+const { setVoiceStatus, cacheTrack, handleAutoplay, isRadioMode, getAutoplay, setAutoplay, updateAutoplaySeed, getVoiceEmoji, clearVoiceEmoji, cleanTitle } = require('../music/MusicManager');
 
 const BOLD_MAP = {
   a:'𝗮',b:'𝗯',c:'𝗰',d:'𝗱',e:'𝗲',f:'𝗳',g:'𝗴',h:'𝗵',i:'𝗶',j:'𝗷',k:'𝗸',l:'𝗹',m:'𝗺',
@@ -72,8 +72,8 @@ async function loadLavalinkEvents(client) {
       if (voiceChannel) {
         const voiceEmoji = getVoiceEmoji(player.guildId);
         const status = voiceEmoji
-          ? `${voiceEmoji} **${track.info.title}**`
-          : `**${track.info.title}**`;
+          ? `${voiceEmoji} **${cleanTitle(track.info.title)}**`
+          : `**${cleanTitle(track.info.title)}**`;
         await setVoiceStatus(client, player.guildId, player.voiceChannelId, status);
       }
 
