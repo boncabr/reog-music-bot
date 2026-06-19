@@ -305,11 +305,11 @@ function cleanTitle(title) {
   if (dash > 0) t = t.slice(dash + 3);
   // Hapus blok parenthesis umum YouTube
   t = t
-    .replace(/s*[.*?]/g, "")
-    .replace(/s*((?:official|lyric|audio|video|mv|hd)[^)]*)/gi, "")
-    .replace(/s*((?:feat|ft).?[^)]*)/gi, "")
-    .replace(/s*(s*)/g, "")
-    .replace(/s*([^)]*$/g, "")
+    .replace(/\s*\[.*?\]/g, "")
+    .replace(/\s*\((?:official|lyric|audio|video|mv|hd)[^)]*\)/gi, "")
+    .replace(/\s*\((?:feat|ft).?[^)]*\)/gi, "")
+    .replace(/\s*\(\s*\)/g, "")
+    .replace(/\s*\([^)]*$/g, "")
     .trim();
   return t || title;
 }
