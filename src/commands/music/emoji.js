@@ -146,7 +146,7 @@ async function handleEmoji(client, ctx, args) {
       if (vcId) {
         const status = `${emoji} **${cleanTitle(track.info.title)}**`;
         await setVoiceStatus(client, guildId, vcId, status);
-        preview = `\n\n🎵 Voice status: \`${emoji} **${cleanTitle(track.info.title)}**\``;
+        preview = `\n\n🎵 Voice status: \`${emoji} ${cleanTitle(track.info.title)}\``;
       } else {
         logger.warn(`emoji: cannot find voiceChannelId in guild ${guildId}`);
         preview = `\n\n_(Emoji akan tampil di voice status saat track berikutnya mulai)_`;
