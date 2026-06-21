@@ -72,8 +72,8 @@ async function loadLavalinkEvents(client) {
       if (voiceChannel) {
         const voiceEmoji = getVoiceEmoji(player.guildId);
         const status = voiceEmoji
-          ? `${voiceEmoji} **${cleanTitle(track.info.title)}**`
-          : `**${cleanTitle(track.info.title)}**`;
+          ? `${voiceEmoji} ${cleanTitle(track.info.title)}`
+          : `${cleanTitle(track.info.title)}`;
         await setVoiceStatus(client, player.guildId, player.voiceChannelId, status);
       }
 
