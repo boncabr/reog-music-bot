@@ -27,14 +27,14 @@ async function handleEmoji(client, ctx, args) {
         || player.voiceChannelId
         || player.options?.voiceChannelId;
       if (vcId) {
-        const status = `**${cleanTitle(track.info.title)}**`;
+        const status = `${cleanTitle(track.info.title)} - ${track.info.author}`;
         await setVoiceStatus(client, guildId, vcId, status);
       }
     }
     const embed = createEmbed({
       color: config.colors.warning,
       title: '🗑️ Emoji Dihapus',
-      description: 'Voice status kembali ke format default:\n`**judul**`',
+      description: 'Voice status kembali ke format default:\n`judul 𝗯𝘆 artist`',
     });
     return isInteraction ? ctx.reply({ embeds: [embed] }) : ctx.reply({ embeds: [embed] });
   }
@@ -93,13 +93,13 @@ async function handleEmoji(client, ctx, args) {
       const player = client.lavalink.getPlayer(guildId);
       if (player?.queue?.current) {
         const track = player.queue.current;
-        const status = `**${cleanTitle(track.info.title)}**`;
+        const status = `${cleanTitle(track.info.title)} - ${track.info.author}`;
         await setVoiceStatus(client, guildId, player.voiceChannelId, status).catch(() => {});
       }
       const resetEmbed = createEmbed({
         color: config.colors.warning,
         title: '🗑️ Emoji Dihapus',
-        description: 'Voice status kembali ke format default:\n`**judul**`',
+        description: 'Voice status kembali ke format default:\n`judul 𝗯𝘆 artist`',
       });
       if (isInteraction) {
         return ctx.editReply({ embeds: [resetEmbed] });
@@ -144,9 +144,9 @@ async function handleEmoji(client, ctx, args) {
       logger.debug(`emoji setVoiceStatus: vcId=${vcId} guildId=${guildId}`);
 
       if (vcId) {
-        const status = `${emoji} **${cleanTitle(track.info.title)}**`;
+        const status = `${emoji} ${cleanTitle(track.info.title)} - ${track.info.author}`;
         await setVoiceStatus(client, guildId, vcId, status);
-        preview = `\n\n🎵 Voice status: \`${emoji} **${cleanTitle(track.info.title)}**\``;
+        preview = `\n\n🎵 Voice status: \`${emoji} ${cleanTitle(track.info.title)} - ${track.info.author}\``;
       } else {
         logger.warn(`emoji: cannot find voiceChannelId in guild ${guildId}`);
         preview = `\n\n_(Emoji akan tampil di voice status saat track berikutnya mulai)_`;

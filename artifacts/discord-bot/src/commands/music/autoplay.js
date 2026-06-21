@@ -40,7 +40,7 @@ async function handleAutoplay(client, ctx) {
     description += `🎤 Artis: **${currentTrack.info.author}**\nBot akan mencari lagu serupa berdasarkan artis ini.`;
   } else if (cache.length > 0) {
     const lastTrack = cache[cache.length - 1];
-    description += `🎤 Berdasarkan: **${lastTrack.info.title}** oleh **${lastTrack.info.author}**`;
+    description += `🎤 Berdasarkan: ${lastTrack.info.title} 𝗯𝘆 ${lastTrack.info.author}`;
   } else {
     description += '⚠️ Belum ada riwayat lagu — putar lagu terlebih dahulu agar deteksi genre lebih akurat.';
   }

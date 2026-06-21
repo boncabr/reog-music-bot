@@ -54,7 +54,7 @@ function nowPlayingEmbed(track, player) {
   const embed = createEmbed({
     color: config.colors.primary,
     title: '🎵 Now Playing',
-    description: `**[${info.title}](${info.uri})**\nby **${info.author}**`,
+    description: `**[${info.title}](${info.uri})**\n𝗯𝘆 ${info.author}`,
     thumbnail: info.artworkUrl || info.thumbnail || null,
     fields: [
       {
@@ -87,7 +87,7 @@ function queueEmbed(player, page = 1) {
   const slice = tracks.slice(start, end);
 
   const description = current
-    ? `**Now Playing:**\n[${current.info.title}](${current.info.uri}) — ${current.info.author}\n\n**Up Next:**`
+    ? `**Now Playing:**\n[${current.info.title}](${current.info.uri}) 𝗯𝘆 ${current.info.author}\n\n**Up Next:**`
     : '**Queue is empty**';
 
   const queueList =
@@ -95,7 +95,7 @@ function queueEmbed(player, page = 1) {
       ? slice
           .map(
             (t, i) =>
-              `\`${start + i + 1}.\` [${t.info.title}](${t.info.uri}) — ${t.info.author}`
+              `\`${start + i + 1}.\` [${t.info.title}](${t.info.uri}) 𝗯𝘆 ${t.info.author}`
           )
           .join('\n')
       : 'No tracks in queue';

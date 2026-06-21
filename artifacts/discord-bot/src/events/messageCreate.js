@@ -1,6 +1,6 @@
 const { checkCooldown } = require('../utils/cooldown');
 const { errorEmbed } = require('../utils/embeds');
-const { handleCommandError } = require('../utils/errorHandler');
+
 const { setAutoplay, getAutoplay } = require('../music/MusicManager');
 const config = require('../config/config');
 const logger = require('../utils/logger');
@@ -39,7 +39,6 @@ module.exports = {
     try {
       await command.execute(client, message, args);
     } catch (err) {
-      await handleCommandError(message, err, true);
       logger.error(`Prefix command error [${commandName}]: ${err.stack}`);
     }
   },
