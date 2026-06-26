@@ -35,7 +35,7 @@ function createLavalinkManager(client) {
     },
     playerOptions: {
       applyVolumeAsFilter: false,
-      clientBasedPositionUpdateInterval: 100,
+      clientBasedPositionUpdateInterval: 5000,
       defaultSearchPlatform: config.music.searchPlatform,
       volumeDecrementer: 1.0,
       onDisconnect: {
@@ -46,7 +46,7 @@ function createLavalinkManager(client) {
         destroyAfterMs: config.music.leaveOnEmptyDelay,
       },
     },
-    autoSkip: true,
+    autoSkip: false,
     autoSkipOnResolveError: true,
     emitNewSongsOnly: true,
   });
