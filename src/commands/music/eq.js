@@ -107,7 +107,7 @@ const PRESETS = {
     speed: null, pitch: null, rotationHz: null, vibrato: null, lowPass: null,
   },
 
-  // ── Efek Spesial — Ciri Khas Reog Bot ──────────────────────────────────────
+  // ── Efek Spesial  ──────────────────────────────────────
   malam_minggu: {
     label: 'Malam Minggu', emoji: '🌃', style: ButtonStyle.Secondary, color: 0x2c3e7a,
     description: '✨ Slow & hangat — feel malam Minggu bareng gebetan',
