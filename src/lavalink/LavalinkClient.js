@@ -46,7 +46,7 @@ function createLavalinkManager(client) {
         destroyAfterMs: config.music.leaveOnEmptyDelay,
       },
     },
-    autoSkip: false,
+    autoSkip: true,
     autoSkipOnResolveError: true,
     emitNewSongsOnly: true,
   });
