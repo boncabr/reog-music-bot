@@ -65,7 +65,7 @@ async function handlePlay(client, ctx, queryStr) {
     } else {
       tracks = [result.tracks[0]];
       const track = tracks[0];
-      description = `🎵 Menambahkan [**${track.info.title}**](${track.info.uri}) oleh **${track.info.author}**${platformTag} ke antrean.`;
+      description = `🎵 Menambahkan [**${track.info.title} 𝒃𝒚 ${track.info.author}**](${track.info.uri})${platformTag} ke antrean.`;
     }
 
     await play(player, tracks);
