@@ -1,5 +1,5 @@
 const logger = require('../utils/logger');
-const { isRadioMode, setAutoplay, clearVoiceEmoji } = require('../music/MusicManager');
+const { isRadioMode, setAutoplay, clearVoiceEmoji, setVoiceStatus } = require('../music/MusicManager');
 
 module.exports = {
   name: 'voiceStateUpdate',
@@ -30,8 +30,14 @@ module.exports = {
         // Matikan autoplay saat bot keluar dari VC
         setAutoplay(guildId, false);
         logger.debug(`Autoplay dimatikan karena bot keluar dari VC di guild ${guildId}`);
-        // Reset emoji ke default saat bot keluar VC (force-disconnect)
+        // Reset emoji preference saat bot keluar VC (force-disconnect)
         clearVoiceEmoji(guildId);
+        // Hapus voice channel status supaya teks lagu tidak terus tampil
+        if (oldState.channelId) {
+          await setVoiceStatus(client, guildId, oldState.channelId, '').catch((e) =>
+            logger.warn(`Failed to clear voice status on disconnect: ${e.message}`)
+          );
+        }
 
         // Try reconnect up to 3 times with back-off
         let attempts = 0;
@@ -99,6 +105,8 @@ module.exports = {
             const ch = oldState.guild.channels.cache.get(p.voiceChannelId);
             const still = ch?.members.filter((m) => !m.user.bot).size ?? 0;
             if (still === 0 && !isRadioMode(guildId)) {
+              // Hapus voice status sebelum bot pergi dari VC kosong
+              await setVoiceStatus(client, guildId, p.voiceChannelId, '').catch(() => {});
               await p.destroy();
               logger.info(`Left empty voice channel in guild ${guildId}`);
             }
