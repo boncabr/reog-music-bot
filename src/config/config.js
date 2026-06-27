@@ -7,7 +7,7 @@ module.exports = {
   guildId: process.env.GUILD_ID || null,
 
   lavalink: {
-        nodes: [
+    nodes: [
       // Node 1 – primary (Railway self-hosted, kualitas terbaik)
       {
         id: 'primary',
@@ -16,12 +16,44 @@ module.exports = {
         password: process.env.LAVALINK_PASSWORD || 'Ariekonur0',
         secure: process.env.LAVALINK_SECURE !== 'false',
       },
-      // Node 2 – fallback cadangan jika Railway offline
+      // Node 2 – fallback publik
       {
         id: 'fallback-1',
         host: 'lavalink.devamop.in',
         port: 443,
         password: 'DevAmOP',
+        secure: true,
+      },
+      // Node 3 – fallback publik
+      {
+        id: 'fallback-2',
+        host: 'lavalink.jirayu.net',
+        port: 13592,
+        password: 'youshallnotpass',
+        secure: false,
+      },
+      // Node 4 – fallback publik
+      {
+        id: 'fallback-3',
+        host: 'lava.link',
+        port: 443,
+        password: 'discloud',
+        secure: true,
+      },
+      // Node 5 – fallback publik
+      {
+        id: 'fallback-4',
+        host: 'lavalink.lexnet.cc',
+        port: 443,
+        password: 'lexnetcc',
+        secure: true,
+      },
+      // Node 6 – fallback publik
+      {
+        id: 'fallback-5',
+        host: 'lavalink.clxud.xyz',
+        port: 443,
+        password: 'lavalink',
         secure: true,
       },
     ],
